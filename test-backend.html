@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Test</title>
+</head>
+
+<body>
+    <h1>Backend Connection Test</h1>
+    <div id="status">Testing...</div>
+    <pre id="result"></pre>
+
+    <script>
+        async function testBackend() {
+            const statusEl = document.getElementById('status');
+            const resultEl = document.getElementById('result');
+
+            try {
+                // Test health endpoint
+                statusEl.textContent = 'Testing http://localhost:3000/api/health...';
+                const response = await fetch('http://localhost:3000/api/health');
+                const data = await response.json();
+
+                statusEl.textContent = 'Backend is running!';
+                statusEl.style.color = 'green';
+                resultEl.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                statusEl.textContent = 'Backend connection failed!';
+                statusEl.style.color = 'red';
+                resultEl.textContent = error.message + '\n\nMake sure Python backend is running:\ncd server\npython main.py';
+            }
+        }
+
+        testBackend();
+    </script>
+</body>
+
+</html>
