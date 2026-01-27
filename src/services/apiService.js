@@ -16,8 +16,14 @@ class APIService {
                 'Content-Type': 'application/json',
                 ...options.headers,
             },
-            ...options,
+            ...options
         };
+
+        // Add Auth Token
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
 
         try {
             const response = await fetch(url, config);
@@ -57,6 +63,14 @@ class APIService {
     async put(endpoint, data) {
         return this.request(endpoint, {
             method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    // PATCH request
+    async patch(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'PATCH',
             body: JSON.stringify(data),
         });
     }

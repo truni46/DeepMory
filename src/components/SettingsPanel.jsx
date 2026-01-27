@@ -13,17 +13,17 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
             <div
-                className="bg-dark-surface border border-emerald border-opacity-20 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+                className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-fade-in"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-bright-green">Settings</h2>
+                    <h2 className="text-xl font-bold text-primary">Settings</h2>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white transition-colors"
+                        className="text-text-muted hover:text-text-primary transition-colors p-1 rounded-full hover:bg-bg-secondary"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -35,69 +35,71 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
                 <div className="space-y-6">
                     {/* Communication Mode */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
                             Communication Mode
                         </label>
                         <ModeSelector
                             mode={localSettings.communication_mode}
                             onChange={(mode) => setLocalSettings({ ...localSettings, communication_mode: mode })}
                         />
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-text-muted mt-2">
                             Streaming: SSE-based (default) • WebSocket: Real-time bidirectional
                         </p>
                     </div>
 
                     {/* Show Timestamps */}
                     <div>
-                        <label className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-300">Show Timestamps</span>
-                            <input
-                                type="checkbox"
-                                checked={localSettings.show_timestamps}
-                                onChange={(e) => setLocalSettings({ ...localSettings, show_timestamps: e.target.checked })}
-                                className="w-5 h-5 text-bright-green bg-deep-forest border-gray-600 rounded focus:ring-bright-green focus:ring-2"
-                            />
+                        <label className="flex items-center justify-between cursor-pointer group">
+                            <span className="text-sm font-medium text-text-primary group-hover:text-primary transition-colors">Show Timestamps</span>
+                            <div className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={localSettings.show_timestamps}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, show_timestamps: e.target.checked })}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </div>
                         </label>
                     </div>
 
                     {/* Theme */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
                             Theme
                         </label>
                         <select
                             value={localSettings.theme}
                             onChange={(e) => setLocalSettings({ ...localSettings, theme: e.target.value })}
-                            className="w-full bg-deep-forest bg-opacity-50 text-gray-200 border border-emerald border-opacity-20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-bright-green"
+                            className="w-full bg-bg-secondary text-text-primary border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                         >
-                            <option value="dark-green">Dark Green</option>
-                            <option value="dark">Dark</option>
-                            <option value="light">Light (Coming Soon)</option>
+                            <option value="light-green">Light Green (Default)</option>
+                            <option value="dark">Dark (Coming Soon)</option>
                         </select>
                     </div>
 
                     {/* Connection Status */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
                             Connection Status
                         </label>
-                        <div className="bg-deep-forest bg-opacity-30 rounded-lg p-3">
+                        <div className="bg-bg-secondary rounded-lg p-3 border border-border">
                             <ConnectionStatus status={connectionStatus} />
                         </div>
                     </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex space-x-3 mt-6">
+                <div className="flex space-x-3 mt-8">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                        className="flex-1 px-4 py-2 bg-white border border-border text-text-secondary hover:bg-bg-secondary rounded-lg transition-colors font-medium"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 px-4 py-2 bg-bright-green hover:bg-emerald text-white rounded-lg transition-colors font-medium"
+                        className="flex-1 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors font-medium shadow-sm hover:shadow-md"
                     >
                         Save Changes
                     </button>

@@ -1,6 +1,6 @@
 import socketio
-from services.message_service import message_service
-from services.history_service import history_service
+from modules.messages.service import message_service
+from modules.memory.history_service import history_service
 from config.logger import logger
 
 # Create Socket.IO server

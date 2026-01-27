@@ -8,8 +8,10 @@ export default {
         extend: {
             colors: {
                 // Light Theme with Bright Green Accents
-                'primary': '#10b981',        // Bright emerald green
-                'primary-dark': '#059669',   // Darker green for hover
+                // Light Theme with Bright Green Accents
+                // Light Theme with Bright Green Accents
+                'primary': '#007E6E',        // Teal Green (User Requested)
+                'primary-dark': '#006558',   // Darker shade
                 'primary-light': '#d1fae5',  // Light green background
                 'bg-main': '#ffffff',        // White background
                 'bg-secondary': '#f9fafb',   // Light gray background

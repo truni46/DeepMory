@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 
 from config.database import db
 from config.logger import logger
-from routes.api import router as api_router
+from common.cache_service import cache_service
+from api_router import router as api_router
 from websocket.handlers import sio
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (force load from server directory)
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
 
 
 # Lifespan context manager for startup and shutdown events
@@ -26,6 +28,9 @@ async def lifespan(app: FastAPI):
     # Connect to database
     await db.connect()
     
+    # Connect to Redis
+    await cache_service.connect()
+    
     # Check database connection
     is_connected = await db.check_connection()
     if is_connected:
@@ -37,6 +42,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down server...")
+    await cache_service.close()
     await db.close()
     logger.info("Server stopped")
 
@@ -44,7 +50,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="AI Tutor API",
-    description="ChatGPT-like chatbot backend with SSE streaming and WebSocket support",
+    description="chatbot backend with SSE streaming and WebSocket support",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -67,7 +73,7 @@ app.include_router(api_router)
 async def root():
     """Root endpoint with API information"""
     return {
-        "message": "AI Tutor Chatbot API",
+        "message": "AI Tutor API",
         "version": "1.0.0",
         "framework": "FastAPI",
         "endpoints": {
@@ -103,7 +109,7 @@ if __name__ == "__main__":
     
     logger.info(f"Starting server on {host}:{port}")
     logger.info(f"Frontend URL: {frontend_url}")
-    logger.info(f"API Documentation: http://{host}:{port}/docs")
+    logger.info(f"API Documentation: http://localhost:{port}/docs")
     
     uvicorn.run(
         socket_app,

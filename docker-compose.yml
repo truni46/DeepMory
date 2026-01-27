@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./server
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - FRONTEND_URL=http://localhost:80
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=ai_tutor_db
+      - DB_USER=ai_tutor
+      - DB_PASSWORD=ai_tutor_pass
+      - REDIS_HOST=redis
+      - USE_DATABASE=true
+      # LLM config (using ollama on host via host.docker.internal if needed, or default)
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: .
+      args:
+        - VITE_API_URL=http://localhost:3000/api
+        - VITE_SOCKET_URL=http://localhost:3000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=ai_tutor
+      - POSTGRES_PASSWORD=ai_tutor_pass
+      - POSTGRES_DB=ai_tutor_db
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_tutor -d ai_tutor_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+networks:
+  app_network:
+
+volumes:
+  postgres_data:

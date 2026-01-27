@@ -49,7 +49,7 @@ class ConversationService {
      */
     async updateConversation(id, updates) {
         try {
-            return await apiService.put(`/conversations/${id}`, updates);
+            return await apiService.patch(`/conversations/${id}`, updates);
         } catch (error) {
             console.error('Error updating conversation:', error);
             throw error;
@@ -75,7 +75,7 @@ class ConversationService {
      */
     async getChatHistory(conversationId) {
         try {
-            return await apiService.get(`/history/${conversationId}`);
+            return await apiService.get(`/messages/${conversationId}`);
         } catch (error) {
             console.error('Error fetching chat history:', error);
             throw error;

@@ -17,7 +17,8 @@ class Database:
     def __init__(self):
         self.use_database = os.getenv('USE_DATABASE', 'false').lower() == 'true'
         self.pool: Optional[pool.SimpleConnectionPool] = None
-        self.data_dir = Path(__file__).parent.parent / 'data'
+        # Move up from config -> server -> root -> data
+        self.data_dir = Path(__file__).parent.parent.parent / 'data'
         self.data_dir.mkdir(exist_ok=True)
         
         # Database configuration
@@ -36,21 +37,20 @@ class Database:
             return
         
         try:
+            import asyncpg
             # Create connection pool
-            self.pool = psycopg2.pool.SimpleConnectionPool(
-                2, 10,  # min and max connections
-                **self.db_config
-            )
+            self.pool = await asyncpg.create_pool(**self.db_config)
             logger.info("Database connected successfully")
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             logger.warning("Falling back to JSON file storage")
             self.use_database = False
+            self.pool = None
     
     async def close(self):
         """Close database connection"""
         if self.pool:
-            self.pool.closeall()
+            await self.pool.close()
             logger.info("Database connection closed")
     
     async def check_connection(self) -> bool:
@@ -59,11 +59,8 @@ class Database:
             return False
         
         try:
-            conn = self.pool.getconn()
-            cur = conn.cursor()
-            cur.execute('SELECT 1')
-            cur.close()
-            self.pool.putconn(conn)
+            async with self.pool.acquire() as conn:
+                await conn.execute('SELECT 1')
             return True
         except Exception as e:
             logger.error(f"Database connection check failed: {e}")

@@ -30,12 +30,12 @@ export default function ChatInput({ onSend, disabled = false }) {
     };
 
     return (
-        <div className="border-t border-border bg-white p-4">
+        <div className="bg-transparent p-4">
             <div className="max-w-3xl mx-auto">
-                <div className="relative flex items-end space-x-2 bg-white border border-border rounded-xl shadow-sm p-2">
+                <div className="relative flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
                     {/* Attach Button */}
                     <button
-                        className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-lg transition-colors"
+                        className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
                         title="Add documents"
                     >
                         <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,7 +51,7 @@ export default function ChatInput({ onSend, disabled = false }) {
                         onKeyPress={handleKeyPress}
                         placeholder="Ask a question..."
                         disabled={disabled}
-                        className="flex-1 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2"
+                        className="flex-1 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2 ml-1"
                         rows={1}
                         style={{ minHeight: '24px' }}
                     />
@@ -60,9 +60,9 @@ export default function ChatInput({ onSend, disabled = false }) {
                     <button
                         onClick={handleSend}
                         disabled={!message.trim() || disabled}
-                        className={`flex-shrink-0 p-2 rounded-lg transition-colors ${message.trim() && !disabled
-                                ? 'bg-primary hover:bg-primary-dark text-white'
-                                : 'bg-transparent text-text-muted cursor-not-allowed'
+                        className={`flex-shrink-0 p-2 rounded-full transition-all duration-200 ${message.trim() && !disabled
+                            ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
+                            : 'bg-transparent text-text-muted cursor-not-allowed'
                             }`}
                         title={message.trim() ? "Send message" : "Record audio"}
                     >
@@ -79,7 +79,7 @@ export default function ChatInput({ onSend, disabled = false }) {
                 </div>
 
                 {/* Footer text */}
-                <div className="mt-2 text-center text-xs text-text-muted">
+                <div className="mt-3 text-center text-xs text-text-muted font-medium opacity-80">
                     AI-Tutor can make mistakes, please check the response.
                 </div>
             </div>
