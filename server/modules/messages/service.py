@@ -8,6 +8,8 @@ from modules.messages.repository import message_repository
 from modules.llm.llm_provider import llm_provider
 from modules.memory.rag_service import rag_service
 from modules.memory.service import memory_service
+from modules.settings.service import settings_service
+from modules.conversations.service import conversation_service
 from config.logger import logger
 
 class MessageService:
@@ -83,6 +85,18 @@ class MessageService:
         # 4. Save Assistant Response
         await message_repository.create(conversation_id, "assistant", full_response, model=llm_provider.model, parent_id=user_msg['id'])
         
+        # 5. Background: Check if we need to update conversation title
+        # If history length is 1 (just the user message we added), it's a new conversation
+        if len(history) <= 1:
+            asyncio.create_task(
+                self.generate_conversation_title(
+                    conversation_id, 
+                    user_id, 
+                    content, 
+                    full_response
+                )
+            )
+        
         # 5. Background: Update Memory/RAG relevance? (Optional)
         # await memory_service.add_memory(user_id, content) # logic to detect important facts
 
@@ -105,5 +119,29 @@ class MessageService:
         # Old signature support
         async for chunk in self.process_message_flow("unknown_user", history[0].get('conversation_id', 'unknown'), message):
              yield chunk
+
+            
+    async def generate_conversation_title(self, conversation_id: str, user_id: str, user_message: str, ai_response: str):
+        """Generate a short title optimization for the conversation"""
+        try:
+            logger.info(f"Generating title for conversation {conversation_id}")
+            
+            prompt = [
+                {"role": "system", "content": "You are a helpful assistant that generates short, concise titles for conversations. Max 6 words. No quotes. No prefixes like 'Title:'."},
+                {"role": "user", "content": f"User: {user_message[:500]}\nAI: {ai_response[:500]}\n\nGenerate a title for this conversation:"}
+            ]
+            
+            title = ""
+            async for chunk in llm_provider._stream_response(prompt):
+                title += chunk
+                
+            title = title.strip().strip('"')
+            
+            if title:
+                logger.info(f"Generated title: {title}")
+                await conversation_service.update_conversation(conversation_id, user_id, {"title": title})
+                
+        except Exception as e:
+            logger.error(f"Error generating conversation title: {e}")
 
 message_service = MessageService()

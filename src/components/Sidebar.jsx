@@ -1,21 +1,24 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ConversationList from './ConversationList';
 import logo from '../assets/logo.png';
 
 export default function Sidebar({
-    conversations,
+    conversations = [],
     activeConversationId,
-    onNewChat,
-    onSelectConversation,
-    onDeleteConversation,
-    onOpenSettings,
-    user
+    onNewChat = () => { },
+    onSelectConversation = () => { },
+    onDeleteConversation = () => { },
+    onOpenSettings = () => { },
+    user,
+    deletingId
 }) {
     const [isExpanded, setIsExpanded] = useState(true);
+    const location = useLocation();
+    const isDocumentsPage = location.pathname === '/documents';
 
     return (
-        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-bg-secondary border-r border-border flex flex-col h-full transition-all duration-300`}>
+        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border-r border-border flex flex-col h-full transition-all duration-300`}>
             {/* Header */}
             <div className="p-3 border-b border-border flex items-center justify-between">
                 {isExpanded ? (
@@ -64,7 +67,13 @@ export default function Sidebar({
 
                         {/* Navigation Items */}
                         <nav className="px-3 space-y-1">
-                            <Link to="/documents" className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors text-text-secondary">
+                            <Link
+                                to="/documents"
+                                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${isDocumentsPage
+                                    ? 'bg-bg-tertiary text-text-primary'
+                                    : 'hover:bg-bg-tertiary text-text-secondary'
+                                    }`}
+                            >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
@@ -90,9 +99,10 @@ export default function Sidebar({
                             </div>
                             <ConversationList
                                 conversations={conversations}
-                                activeId={activeConversationId}
+                                activeId={isDocumentsPage ? null : activeConversationId}
                                 onSelect={onSelectConversation}
                                 onDelete={onDeleteConversation}
+                                deletingId={deletingId}
                             />
                         </div>
                     </>
@@ -108,8 +118,15 @@ export default function Sidebar({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
                         </button>
-                        <Link to="/documents" className="p-2.5 rounded-lg hover:bg-bg-tertiary transition-colors" title="Documents">
-                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <Link
+                            to="/documents"
+                            className={`p-2.5 rounded-lg transition-colors ${isDocumentsPage
+                                ? 'bg-bg-tertiary text-text-primary'
+                                : 'hover:bg-bg-tertiary text-text-secondary'
+                                }`}
+                            title="Documents"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </Link>

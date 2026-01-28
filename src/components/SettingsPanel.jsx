@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import SimpleMDE from 'react-simplemde-editor';
+import 'easymde/dist/easymde.min.css';
 import ModeSelector from './ModeSelector';
 import ConnectionStatus from './ConnectionStatus';
 
@@ -15,7 +17,7 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
     return (
         <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
             <div
-                className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-fade-in"
+                className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-fade-in flex flex-col max-h-[85vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -32,7 +34,7 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
                 </div>
 
                 {/* Settings Content */}
-                <div className="space-y-6">
+                <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-2">
                     {/* Communication Mode */}
                     <div>
                         <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -61,6 +63,28 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                             </div>
                         </label>
+                    </div>
+
+                    {/* Welcome Message */}
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
+                            Welcome Message
+                        </label>
+                        <div className="prose prose-sm max-w-none border rounded-lg overflow-hidden">
+                            <SimpleMDE
+                                value={localSettings.welcome_message || ''}
+                                onChange={(value) => setLocalSettings({ ...localSettings, welcome_message: value })}
+                                options={{
+                                    spellChecker: false,
+                                    maxHeight: "150px",
+                                    status: false,
+                                    toolbar: ["bold", "italic", "heading", "|", "quote", "code", "unordered-list", "ordered-list", "|", "preview", "guide"],
+                                }}
+                            />
+                        </div>
+                        <p className="text-xs text-text-muted mt-1">
+                            Customize the initial greeting message.
+                        </p>
                     </div>
 
                     {/* Theme */}

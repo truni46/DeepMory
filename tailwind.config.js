@@ -13,8 +13,8 @@ export default {
                 'primary': '#007E6E',        // Teal Green (User Requested)
                 'primary-dark': '#006558',   // Darker shade
                 'primary-light': '#d1fae5',  // Light green background
-                'bg-main': '#ffffff',        // White background
-                'bg-secondary': '#f9fafb',   // Light gray background
+                'page': '#F8FFFE',           // Light green background (Visible Green 100)
+                'sidebar': '#ffffff',        // White sidebar
                 'bg-tertiary': '#f3f4f6',    // Slightly darker gray
                 'text-primary': '#111827',   // Dark gray text
                 'text-secondary': '#6b7280', // Medium gray text
@@ -49,5 +49,7 @@ export default {
             },
         },
     },
-    plugins: [],
+    plugins: [
+        require('@tailwindcss/typography'),
+    ],
 }

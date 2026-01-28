@@ -11,11 +11,11 @@ function App() {
             <AuthProvider>
                 <Routes>
                     <Route path="/login" element={<LoginPage />} />
-                    <Route path="/documents" element={<DocumentsPage />} />
 
                     {/* Protected Routes */}
                     <Route element={<ChatLayout />}>
                         <Route path="/" element={<ChatPage />} />
+                        <Route path="/documents" element={<DocumentsPage />} />
                     </Route>
 
                     {/* Catch all */}

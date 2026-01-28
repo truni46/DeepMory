@@ -7,10 +7,11 @@ class SettingsService:
     """Service for managing user-specific settings"""
     
     DEFAULT_SETTINGS = {
-        'communication_mode': 'streaming',
+        'communication_mode': 'websocket',
         'theme': 'light-green',
         'show_timestamps': True,
-        'ai_response_speed': 'medium'
+        'ai_response_speed': 'medium',
+        'welcome_message': 'Hello! How can I help you today?'
     }
     
     @staticmethod

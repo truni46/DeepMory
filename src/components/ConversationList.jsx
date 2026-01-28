@@ -1,13 +1,13 @@
-export default function ConversationList({ conversations, activeId, onSelect, onDelete }) {
+export default function ConversationList({ conversations = [], activeId, onSelect, onDelete, deletingId }) {
     return (
         <div className="px-2 space-y-1 overflow-y-auto custom-scrollbar">
             {conversations.map((conv) => (
                 <div
                     key={conv.id}
-                    className={`group relative flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${activeId === conv.id
-                            ? 'bg-bg-tertiary'
-                            : 'hover:bg-bg-tertiary'
-                        }`}
+                    className={`group relative flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all duration-300 ease-in-out ${activeId === conv.id
+                        ? 'bg-bg-tertiary'
+                        : 'hover:bg-bg-tertiary'
+                        } ${deletingId === conv.id ? 'opacity-0 -translate-x-full h-0 mb-0 py-0 overflow-hidden' : ''}`}
                     onClick={() => onSelect(conv.id)}
                 >
                     <div className="flex items-center space-x-2 flex-1 min-w-0">
@@ -25,7 +25,7 @@ export default function ConversationList({ conversations, activeId, onSelect, on
                             e.stopPropagation();
                             onDelete(conv.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-bg-main rounded transition-opacity flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-page rounded transition-opacity flex-shrink-0"
                         title="Delete conversation"
                     >
                         <svg className="w-4 h-4 text-text-secondary hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

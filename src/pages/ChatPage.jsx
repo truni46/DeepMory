@@ -1,37 +1,27 @@
-
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { FiLogOut } from 'react-icons/fi';
-import Sidebar from '../components/Sidebar';
+import { useOutletContext } from 'react-router-dom';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
-import SettingsPanel from '../components/SettingsPanel';
 import conversationService from '../services/conversationService';
 import streamingService from '../services/streamingService';
 import websocketService from '../services/websocketService';
-import apiService from '../services/apiService';
 import logger from '../utils/logger';
 import { useAuth } from '../context/AuthContext';
 
 export default function ChatPage() {
-    // State
-    const [conversations, setConversations] = useState([]);
-    const [activeConversationId, setActiveConversationId] = useState(null);
+    // Context from Layout
+    const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
+    const { logout } = useAuth();
+
+    // Local State (only chat content)
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
-    const [initialLoad, setInitialLoad] = useState(true);
-    const [settings, setSettings] = useState({
-        communication_mode: 'streaming',
-        show_timestamps: true,
-        theme: 'light-green'
-    });
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
-    const [showSettings, setShowSettings] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [streamingMessage, setStreamingMessage] = useState('');
-
-    // Auth context
-    const { user, logout } = useAuth();
 
     const messagesEndRef = useRef(null);
 
@@ -44,17 +34,7 @@ export default function ChatPage() {
         scrollToBottom();
     }, [messages, isTyping, streamingMessage]);
 
-    // Load initial data
-    useEffect(() => {
-        const initApp = async () => {
-            await loadConversations();
-            await loadSettings();
-            setInitialLoad(false);
-        };
-        initApp();
-    }, []);
-
-    // Handle settings changes
+    // Cleanup WebSocket
     useEffect(() => {
         if (settings.communication_mode === 'websocket') {
             connectWebSocket();
@@ -64,37 +44,21 @@ export default function ChatPage() {
         return () => disconnectWebSocket();
     }, [settings.communication_mode]);
 
-    // Load conversations
-    const loadConversations = async () => {
-        try {
-            const convs = await conversationService.getAllConversations();
-            setConversations(convs);
-            if (convs.length > 0 && !activeConversationId) {
-                setActiveConversationId(convs[0].id);
-                loadMessages(convs[0].id);
-            }
-        } catch (error) {
-            logger.error('Error loading conversations:', error);
+    // Load messages when active conversation changes
+    useEffect(() => {
+        if (activeConversationId) {
+            loadMessages(activeConversationId);
+        } else {
+            setMessages([]);
         }
-    };
+    }, [activeConversationId]);
 
-    // Load messages
     const loadMessages = async (conversationId) => {
         try {
             const msgs = await conversationService.getChatHistory(conversationId);
             setMessages(msgs);
         } catch (error) {
             logger.error('Error loading messages:', error);
-        }
-    };
-
-    // Load settings
-    const loadSettings = async () => {
-        try {
-            const settingsData = await apiService.get('/settings');
-            setSettings(settingsData);
-        } catch (error) {
-            logger.error('Error loading settings:', error);
         }
     };
 
@@ -120,6 +84,12 @@ export default function ChatPage() {
             setMessages(prev => [...prev, newMessage]);
             setStreamingMessage('');
             setIsTyping(false);
+            scrollToBottom();
+
+            // Refresh to show updated title if needed
+            if (activeConversationId) {
+                setTimeout(() => loadConversations(), 2500);
+            }
         });
 
         websocketService.onTyping((data) => {
@@ -137,45 +107,24 @@ export default function ChatPage() {
         setConnectionStatus('disconnected');
     };
 
-    // Chat Actions
-    const handleNewChat = async () => {
-        try {
-            const newConv = await conversationService.createConversation();
-            setConversations(prev => [newConv, ...prev]);
-            setActiveConversationId(newConv.id);
-            setMessages([]);
-        } catch (error) {
-            logger.error('Error creating chat:', error);
-        }
-    };
-
-    const handleSelectConversation = async (id) => {
-        setActiveConversationId(id);
-        await loadMessages(id);
-    };
-
-    const handleDeleteConversation = async (id) => {
-        if (!confirm('Delete conversation?')) return;
-        try {
-            await conversationService.deleteConversation(id);
-            setConversations(prev => prev.filter(c => c.id !== id));
-            if (activeConversationId === id) {
-                const remaining = conversations.filter(c => c.id !== id);
-                if (remaining.length > 0) {
-                    handleSelectConversation(remaining[0].id);
-                } else {
-                    setActiveConversationId(null);
-                    setMessages([]);
-                }
-            }
-        } catch (error) {
-            logger.error('Error deleting chat:', error);
-        }
-    };
-
     const handleSendMessage = async (messageText) => {
-        if (!activeConversationId) {
-            await handleNewChat();
+        let currentId = activeConversationId;
+
+        // Create conversation if none exists (Lazy Creation)
+        if (!currentId) {
+            try {
+                // Auto-generate title: First 4 words of the message
+                const title = messageText.split(' ').slice(0, 4).join(' ') || 'New Conversation';
+
+                const newConv = await conversationService.createConversation(title);
+                currentId = newConv.id;
+
+                await loadConversations(); // Refresh layout list
+                setActiveConversationId(currentId); // Update layout active ID
+            } catch (e) {
+                logger.error("Failed to create chat on send", e);
+                return;
+            }
         }
 
         const userMessage = {
@@ -188,12 +137,12 @@ export default function ChatPage() {
 
         try {
             if (settings.communication_mode === 'websocket') {
-                websocketService.sendMessageStreaming(messageText, activeConversationId);
+                websocketService.sendMessageStreaming(messageText, currentId);
             } else {
                 setStreamingMessage('');
                 await streamingService.sendMessage(
                     messageText,
-                    activeConversationId,
+                    currentId,
                     (chunk) => setStreamingMessage(prev => prev + chunk),
                     (fullResponse) => {
                         const aiMessage = {
@@ -205,8 +154,9 @@ export default function ChatPage() {
                         setStreamingMessage('');
                         setIsTyping(false);
 
-                        if (messages.length === 0) {
-                            updateConversationTitle(activeConversationId, messageText);
+                        // Refresh to show updated title if needed
+                        if (currentId) {
+                            setTimeout(() => loadConversations(), 2500);
                         }
                     },
                     (error) => {
@@ -225,115 +175,73 @@ export default function ChatPage() {
     const updateConversationTitle = async (id, text) => {
         const title = text.length > 50 ? text.substring(0, 50) + '...' : text;
         await conversationService.updateConversation(id, { title });
-        loadConversations();
+        loadConversations(); // Trigger Layout refresh
     };
-
-    const handleSaveSettings = async (newSettings) => {
-        try {
-            await apiService.put('/settings', newSettings);
-            setSettings(newSettings);
-        } catch (error) {
-            logger.error('Error saving settings:', error);
-        }
-    };
-
-    // Render
-    if (initialLoad) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-bg-main">
-                <div className="text-center">
-                    <div className="text-6xl mb-4 animate-bounce">🤖</div>
-                    <h2 className="text-xl font-semibold text-primary">Loading AI Tutor...</h2>
-                </div>
-            </div>
-        );
-    }
 
     return (
-        <div className="flex h-screen bg-bg-main text-text-primary">
-            <Sidebar
-                conversations={conversations}
-                activeConversationId={activeConversationId}
-                onNewChat={handleNewChat}
-                onSelectConversation={handleSelectConversation}
-                onDeleteConversation={handleDeleteConversation}
-                onOpenSettings={() => setShowSettings(true)}
-                user={user}
-            />
-
-            <div className="flex-1 flex flex-col">
-                <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        <button className="p-2 hover:bg-bg-secondary rounded-lg">
-                            <svg className="w-5 h-5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
-                        </button>
-                        <h2 className="text-sm font-medium text-text-primary">
-                            {activeConversationId
-                                ? conversations.find(c => c.id === activeConversationId)?.title || 'Chat'
-                                : 'New Conversation'
-                            }
-                        </h2>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={() => setShowLogoutConfirm(true)}
-                            className="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-sm hover:bg-red-100 transition-colors flex items-center gap-2"
-                        >
-                            <FiLogOut className="w-4 h-4" />
-                            <span>Logout</span>
-                        </button>
-                    </div>
+        <div className="flex-1 flex flex-col h-full relative">
+            {/* Header */}
+            <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shadow-sm z-10">
+                <div className="flex items-center space-x-3">
+                    <h2 className="text-sm font-medium text-text-primary">
+                        {activeConversationId ? 'Chat' : 'New Conversation'}
+                    </h2>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
-                    {messages.length === 0 && !isTyping ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg mb-3">
-                                AI
-                            </div>
-                            <h3 className="text-lg font-semibold text-text-primary mb-1">How can I help you today?</h3>
-                            <p className="text-sm text-text-secondary max-w-md">
-                                Start a conversation by typing a message below.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="max-w-3xl mx-auto pb-4">
-                            {messages.map((msg, index) => (
-                                <ChatMessage
-                                    key={index}
-                                    message={msg}
-                                    showTimestamp={settings.show_timestamps}
-                                />
-                            ))}
-                            {isTyping && !streamingMessage && <TypingIndicator />}
-                            {streamingMessage && (
-                                <ChatMessage
-                                    message={{
-                                        role: 'assistant',
-                                        content: streamingMessage,
-                                        created_at: new Date().toISOString()
-                                    }}
-                                    showTimestamp={false}
-                                />
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    )}
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => setShowLogoutConfirm(true)}
+                        className="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-sm hover:bg-red-100 transition-colors flex items-center gap-2"
+                    >
+                        <FiLogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                    </button>
                 </div>
-
-                <ChatInput onSend={handleSendMessage} disabled={isTyping} />
             </div>
 
-            <SettingsPanel
-                isOpen={showSettings}
-                onClose={() => setShowSettings(false)}
-                settings={settings}
-                onSave={handleSaveSettings}
-                connectionStatus={connectionStatus}
-            />
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
+                {messages.length === 0 && !isTyping ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg mb-3">
+                            AI
+                        </div>
+                        <h3 className="text-lg font-semibold text-text-primary mb-1">How can I help you today?</h3>
+                        <p className="text-sm text-text-secondary max-w-md">
+                            Start a conversation by typing a message below.
+                        </p>
+                        {/* <div className="prose prose-sm text-center max-w-md text-text-primary mt-2">
+                            <ReactMarkdown>
+                                {settings.welcome_message || "Hello! How can I help you today?\n\nStart a conversation by typing a message below."}
+                            </ReactMarkdown>
+                        </div> */}
+                    </div>
+                ) : (
+                    <div className="max-w-3xl mx-auto pb-4">
+                        {messages.map((msg, index) => (
+                            <ChatMessage
+                                key={index}
+                                message={msg}
+                                showTimestamp={settings.show_timestamps}
+                            />
+                        ))}
+                        {isTyping && !streamingMessage && <TypingIndicator />}
+                        {streamingMessage && (
+                            <ChatMessage
+                                message={{
+                                    role: 'assistant',
+                                    content: streamingMessage,
+                                    created_at: new Date().toISOString()
+                                }}
+                                showTimestamp={false}
+                            />
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                )}
+            </div>
+
+            <ChatInput onSend={handleSendMessage} disabled={isTyping} />
 
             {/* Logout Confirmation Modal */}
             {showLogoutConfirm && (

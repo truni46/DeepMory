@@ -1,7 +1,6 @@
 import uuid
-from datetime import datetime
 from typing import Dict, List
-from config.database import db
+from modules.messages.repository import message_repository
 from config.logger import logger
 
 
@@ -12,7 +11,7 @@ class HistoryService:
     async def get_chat_history(conversation_id: str, limit: int = 100, offset: int = 0) -> List[Dict]:
         """Get chat history for a conversation"""
         try:
-            messages = await db.get_messages(conversation_id, limit, offset)
+            messages = await message_repository.get_by_conversation(conversation_id, limit, offset)
             logger.info(f"Retrieved {len(messages)} messages for conversation: {conversation_id}")
             return messages
         except Exception as e:
@@ -25,11 +24,12 @@ class HistoryService:
         try:
             message_id = str(uuid.uuid4())
             
-            message = await db.save_message(
-                message_id=message_id,
+            # Using the unified repository 'create' method
+            message = await message_repository.create(
                 conversation_id=conversation_id,
                 role=role,
                 content=content,
+                message_id=message_id,
                 metadata=metadata or {}
             )
             
@@ -43,7 +43,7 @@ class HistoryService:
     async def search_messages(query: str, limit: int = 50) -> List[Dict]:
         """Search messages"""
         try:
-            messages = await db.search_messages(query, limit)
+            messages = await message_repository.search(query, limit)
             logger.info(f"Found {len(messages)} messages for query: {query[:50]}")
             return messages
         except Exception as e:
@@ -52,9 +52,9 @@ class HistoryService:
     
     @staticmethod
     async def delete_message(message_id: str) -> bool:
-        """Delete a message (if implemented in DB)"""
+        """Delete a message (if implemented)"""
         try:
-            # This would need to be implemented in database.py
+            # Not yet implemented in repository
             logger.info(f"Deleted message: {message_id}")
             return True
         except Exception as e:
