@@ -1,6 +1,6 @@
 import uuid
 from typing import Dict, List
-from modules.messages.repository import message_repository
+from modules.chat.repository import message_repository
 from config.logger import logger
 
 
@@ -11,7 +11,7 @@ class HistoryService:
     async def get_chat_history(conversation_id: str, limit: int = 100, offset: int = 0) -> List[Dict]:
         """Get chat history for a conversation"""
         try:
-            messages = await message_repository.get_by_conversation(conversation_id, limit, offset)
+            messages = await message_repository.get_byConversation(conversation_id, limit, offset)
             logger.info(f"Retrieved {len(messages)} messages for conversation: {conversation_id}")
             return messages
         except Exception as e:
@@ -63,4 +63,4 @@ class HistoryService:
 
 
 # Export instance
-history_service = HistoryService()
+historyService = HistoryService()

@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.database import db
 from modules.auth.service import auth_service
 from modules.conversations.repository import conversation_repository
-from modules.messages.repository import message_repository
+from modules.chat.repository import message_repository
 
 async def seed():
     # Connect to DB
@@ -18,7 +18,7 @@ async def seed():
     email = "agentic_rag_demo@example.com"
     password = "password123"
     try:
-        user = await auth_service.register_user(email, password, "DemoUser", "Agentic Demo")
+        user = await auth_service.registerUser(email, password, "DemoUser", "Agentic Demo")
         print(f"User created: {user['id']}")
     except ValueError:
         # User might exist, lets fetch

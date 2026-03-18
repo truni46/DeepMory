@@ -1,40 +1,32 @@
 from typing import Dict, List, Optional
-from modules.conversations.repository import conversation_repository
+from modules.conversations.repository import conversationRepository
 from config.logger import logger
 
 class ConversationService:
     """Service for managing conversations"""
     
-    async def get_user_conversations(self, user_id: str) -> List[Dict]:
+    async def getConversations(self, userId: str) -> List[Dict]:
         """Get all conversations for a user"""
-        return await conversation_repository.get_by_user(user_id)
+        return await conversationRepository.getByUser(userId)
     
-    async def get_conversation(self, conversation_id: str, user_id: str) -> Optional[Dict]:
+    async def getConversation(self, conversationId: str, userId: str) -> Optional[Dict]:
         """Get conversation by ID"""
-        return await conversation_repository.get_by_id(conversation_id, user_id)
+        return await conversationRepository.getById(conversationId, userId)
     
-    async def create_conversation(self, user_id: str, title: str = None, project_id: str = None) -> Dict:
+    async def createConversation(self, userId: str, title: str = None, projectId: str = None) -> Dict:
         """Create new conversation"""
-        return await conversation_repository.create(user_id, title, project_id)
+        return await conversationRepository.create(userId, title, projectId)
 
-    async def update_conversation(self, conversation_id: str, user_id: str, updates: Dict) -> Optional[Dict]:
+    async def updateConversation(self, conversationId: str, userId: str, updates: Dict) -> Optional[Dict]:
         """Update conversation fields"""
-        # Filter valid updates
-        valid_updates = {k: v for k, v in updates.items() if v is not None}
-        if not valid_updates:
-            return await self.get_conversation(conversation_id, user_id)
+        validUpdates = {k: v for k, v in updates.items() if v is not None}
+        if not validUpdates:
+            return await self.getConversation(conversationId, userId)
             
-        return await conversation_repository.update(conversation_id, user_id, valid_updates)
+        return await conversationRepository.update(conversationId, userId, validUpdates)
 
-    async def delete_conversation(self, conversation_id: str, user_id: str) -> bool:
+    async def deleteConversation(self, conversationId: str, userId: str) -> bool:
         """Delete a conversation"""
-        return await conversation_repository.delete(conversation_id, user_id)
+        return await conversationRepository.delete(conversationId, userId)
 
-    # Legacy method support (optional, or remove if fully breaking)
-    async def get_all_conversations(self) -> List[Dict]:
-        # This implies getting ALL conversations for ALL users, likely not what we want anymore. 
-        # But for backward compat with existing routes (which didn't have auth yet), we might leave a placeholder or error.
-        # Assuming we will update routes to use auth.
-        pass
-
-conversation_service = ConversationService()
+conversationService = ConversationService()

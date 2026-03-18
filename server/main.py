@@ -1,21 +1,22 @@
 import os
+from dotenv import load_dotenv
+
+# MUST load environment variables FIRST, before importing any internal modules
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
+
 import uvicorn
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 
 from config.database import db
 from config.logger import logger
-from common.cache_service import cache_service
-from api_router import router as api_router
+from common.cacheService import cacheService
+from apiRouter import router as apiRouter
 from websocket.handlers import sio
-
-# Load environment variables (force load from server directory)
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=env_path)
 
 
 # Lifespan context manager for startup and shutdown events
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
     await db.connect()
     
     # Connect to Redis
-    await cache_service.connect()
+    await cacheService.connect()
     
     # Check database connection
     is_connected = await db.check_connection()
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down server...")
-    await cache_service.close()
+    await cacheService.close()
     await db.close()
     logger.info("Server stopped")
 
@@ -56,17 +57,17 @@ app = FastAPI(
 )
 
 # CORS Configuration
-frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+frontendUrl = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:5173", "*"],  # Allow frontend
+    allow_origins=[frontendUrl, "http://localhost:5173", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include API routes
-app.include_router(api_router)
+app.include_router(apiRouter)
 
 # Root endpoint
 @app.get("/")
@@ -81,10 +82,8 @@ async def root():
             "dbStatus": "/api/db-status",
             "conversations": "/api/conversations",
             "messages": "/api/messages",
-            "messagesStream": "/api/messages/stream",
-            "history": "/api/history/:conversationId",
-            "settings": "/api/settings",
-            "export": "/api/export/:conversationId"
+            "chat": "/api/messages/chat/completions",
+            "settings": "/api/settings"
         },
         "websocket": "/socket.io",
         "documentation": {
@@ -95,7 +94,7 @@ async def root():
 
 
 # Create Socket.IO ASGI app
-socket_app = socketio.ASGIApp(
+socketApp = socketio.ASGIApp(
     sio,
     other_asgi_app=app,
     socketio_path='/socket.io'
@@ -108,11 +107,11 @@ if __name__ == "__main__":
     host = os.getenv('HOST', '0.0.0.0')
     
     logger.info(f"Starting server on {host}:{port}")
-    logger.info(f"Frontend URL: {frontend_url}")
+    logger.info(f"Frontend URL: {frontendUrl}")
     logger.info(f"API Documentation: http://localhost:{port}/docs")
     
     uvicorn.run(
-        socket_app,
+        socketApp,
         host=host,
         port=port,
         log_level="info"

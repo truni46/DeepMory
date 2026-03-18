@@ -1,22 +1,21 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from typing import List, Optional
-from typing import List, Optional
 from common.deps import get_current_user
-from modules.knowledge.service import document_service
+from modules.knowledge.service import documentService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 @router.post("/upload")
-async def upload_document(
+async def uploadDocument(
     file: UploadFile = File(...),
-    project_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+    projectId: Optional[str] = None,
+    currentUser: dict = Depends(get_current_user)
 ):
     try:
-        doc = await document_service.upload_document(
-            user_id=str(current_user['id']),
-            project_id=project_id,
-            file_obj=file,
+        doc = await documentService.uploadDocument(
+            userId=str(currentUser['id']),
+            projectId=projectId,
+            fileObj=file,
             filename=file.filename
         )
         return doc
@@ -24,23 +23,23 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/documents")
-async def get_documents(
-    current_user: dict = Depends(get_current_user)
+async def getDocuments(
+    currentUser: dict = Depends(get_current_user)
 ):
     try:
-        return await document_service.get_user_documents(user_id=str(current_user['id']))
+        return await documentService.getUserDocuments(userId=str(currentUser['id']))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/documents/{document_id}")
-async def delete_document(
-    document_id: str,
-    current_user: dict = Depends(get_current_user)
+@router.delete("/documents/{documentId}")
+async def deleteDocument(
+    documentId: str,
+    currentUser: dict = Depends(get_current_user)
 ):
     try:
-        success = await document_service.delete_document(
-            user_id=str(current_user['id']),
-            document_id=document_id
+        success = await documentService.deleteDocument(
+            userId=str(currentUser['id']),
+            documentId=documentId
         )
         if not success:
             raise HTTPException(status_code=404, detail="Document not found or unauthorized")

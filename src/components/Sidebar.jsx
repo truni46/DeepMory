@@ -147,10 +147,10 @@ export default function Sidebar({
                         className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors"
                     >
                         <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold">
-                            {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (user?.username?.charAt(0).toUpperCase() || 'U')}
+                            {user?.fullName ? user.fullName.charAt(0).toUpperCase() : (user?.fullName?.charAt(0).toUpperCase() || 'U')}
                         </div>
                         <span className="text-sm text-text-primary font-medium truncate">
-                            {user?.full_name || user?.username || 'User'}
+                            {user?.fullName || user?.fullName || 'User'}
                         </span>
                     </button>
                 </div>

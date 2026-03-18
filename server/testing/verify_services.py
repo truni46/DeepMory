@@ -9,8 +9,8 @@ from common.cache_service import cache_service
 from modules.auth.service import auth_service
 from modules.projects.service import project_service
 from modules.conversations.service import conversation_service
-from modules.messages.service import message_service
-from modules.messages.repository import message_repository
+from modules.chat.service import chat_service
+from modules.chat.repository import message_repository
 from modules.knowledge.service import document_service
 from config.logger import logger
 
@@ -59,7 +59,7 @@ async def verify_system():
         
         # Consume stream
         response_text = ""
-        async for chunk in message_service.process_message_flow(user_id, conv_id, message_content, project_id):
+        async for chunk in chat_service.process_message_flow(user_id, conv_id, message_content, project_id):
             response_text += chunk
             print(chunk, end="", flush=True)
         print("\n")

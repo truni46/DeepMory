@@ -15,7 +15,7 @@ class Database:
     """Database manager with PostgreSQL and JSON fallback support"""
     
     def __init__(self):
-        self.use_database = os.getenv('USE_DATABASE', 'false').lower() == 'true'
+        self.useDatabase = os.getenv('USE_DATABASE', 'false').lower() == 'true'
         self.pool: Optional[pool.SimpleConnectionPool] = None
         # Move up from config -> server -> root -> data
         self.data_dir = Path(__file__).parent.parent.parent / 'data'
@@ -32,7 +32,7 @@ class Database:
     
     async def connect(self):
         """Connect to PostgreSQL database"""
-        if not self.use_database:
+        if not self.useDatabase:
             logger.info("Database disabled, using JSON file storage")
             return
         
@@ -44,7 +44,7 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             logger.warning("Falling back to JSON file storage")
-            self.use_database = False
+            self.useDatabase = False
             self.pool = None
     
     async def close(self):
@@ -55,7 +55,7 @@ class Database:
     
     async def check_connection(self) -> bool:
         """Check if database is connected"""
-        if not self.use_database or not self.pool:
+        if not self.useDatabase or not self.pool:
             return False
         
         try:

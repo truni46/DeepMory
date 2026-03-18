@@ -1,42 +1,41 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict
-from modules.conversations.service import conversation_service
+from modules.conversations.service import conversationService
 from common.deps import get_current_user
 from schemas import ConversationCreate, ConversationUpdate
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 @router.get("")
-async def get_conversations(user: Dict = Depends(get_current_user)):
-    return await conversation_service.get_user_conversations(str(user['id']))
+async def getConversations(user: Dict = Depends(get_current_user)):
+    return await conversationService.getConversations(str(user['id']))
 
 @router.post("", status_code=201)
-async def create_conversation(data: ConversationCreate, user: Dict = Depends(get_current_user)):
-    return await conversation_service.create_conversation(str(user['id']), data.title, data.project_id)
+async def createConversation(data: ConversationCreate, user: Dict = Depends(get_current_user)):
+    return await conversationService.createConversation(str(user['id']), data.title, data.projectId)
 
-@router.get("/{conversation_id}")
-async def get_conversation(conversation_id: str, user: Dict = Depends(get_current_user)):
-    conv = await conversation_service.get_conversation(conversation_id, str(user['id']))
+@router.get("/{conversationId}")
+async def getConversation(conversationId: str, user: Dict = Depends(get_current_user)):
+    conv = await conversationService.getConversation(conversationId, str(user['id']))
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conv
 
-@router.patch("/{conversation_id}")
-async def update_conversation(
-    conversation_id: str, 
+@router.patch("/{conversationId}")
+async def updateConversation(
+    conversationId: str, 
     data: ConversationUpdate, 
     user: Dict = Depends(get_current_user)
 ):
     updates = data.dict(exclude_unset=True)
-    updated_conv = await conversation_service.update_conversation(conversation_id, str(user['id']), updates)
-    
-    if not updated_conv:
+    updatedConv = await conversationService.updateConversation(conversationId, str(user['id']), updates)
+    if not updatedConv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return updated_conv
+    return updatedConv
 
-@router.delete("/{conversation_id}", status_code=204)
-async def delete_conversation(conversation_id: str, user: Dict = Depends(get_current_user)):
-    success = await conversation_service.delete_conversation(conversation_id, str(user['id']))
+@router.delete("/{conversationId}", status_code=204)
+async def deleteConversation(conversationId: str, user: Dict = Depends(get_current_user)):
+    success = await conversationService.deleteConversation(conversationId, str(user['id']))
     if not success:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return None

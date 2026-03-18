@@ -11,6 +11,11 @@ class LLMProvider(Protocol):
     def model_name(self) -> str:
         ...
 
+
+# -------------------------------------------------------------
+# Base & Concrete Providers
+# -------------------------------------------------------------
+
 class BaseOpenAIProvider:
     def __init__(self, api_key: str, base_url: str, model: str):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
@@ -28,7 +33,7 @@ class BaseOpenAIProvider:
                 )
                 return response.choices[0].message.content
         except Exception as e:
-            logger.error(f"LLM Provider error: {e}")
+            logger.error(f"LLM Provider ({self.model}) error: {e}")
             return f"Error from LLM provider: {str(e)}"
 
     async def _stream_response(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
@@ -39,11 +44,12 @@ class BaseOpenAIProvider:
                 stream=True
             )
             async for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
+                if chunk.choices:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield content
         except Exception as e:
-            logger.error(f"LLM Streaming error: {e}")
+            logger.error(f"LLM Streaming error ({self.model}): {e}")
             yield f"Error streaming response: {str(e)}"
             
     @property
@@ -51,36 +57,32 @@ class BaseOpenAIProvider:
         return self.model
 
 class OllamaProvider(BaseOpenAIProvider):
-    def __init__(self):
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-        model = os.getenv("LLM_MODEL", "mistral") # Default to mistral for Ollama
-        # Api key is required by client but ignored by Ollama
+    def __init__(self, base_url: str = None, model: str = None):
+        base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        model = model or os.getenv("LLM_MODEL", "qwen3:8b") 
+        # API key is ignored by Ollama but required by client
         super().__init__(api_key="ollama", base_url=base_url, model=model)
 
 class OpenAIProvider(BaseOpenAIProvider):
-    def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key: str = None, model: str = None):
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAI Provider")
-        model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
-        super().__init__(api_key=api_key, base_url="https://api.openai.com/v1", model=model)
+            pass # Relaxed check for dynamic instantiation; will fail at call time if missing
+        model = model or os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+        super().__init__(api_key=api_key or "dummy", base_url="https://api.openai.com/v1", model=model)
 
 class GeminiProvider(BaseOpenAIProvider):
-    def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-             raise ValueError("GEMINI_API_KEY is required for Gemini Provider")
-        # Google Gemini via OpenAI Compat endpoint
+    def __init__(self, api_key: str = None, model: str = None):
+        api_key = api_key or os.getenv("GEMINI_API_KEY")
         base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-        model = os.getenv("LLM_MODEL", "gemini-pro")
-        super().__init__(api_key=api_key, base_url=base_url, model=model)
+        model = model or "gemini-2.5-flash"
+        super().__init__(api_key=api_key or "dummy", base_url=base_url, model=model)
 
 class VLLMProvider(BaseOpenAIProvider):
-    def __init__(self):
-        base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
-        model = os.getenv("LLM_MODEL", "llama-2-7b") 
-        # API key might be optional or required depending on vLLM cleanup
-        api_key = os.getenv("VLLM_API_KEY", "EMPTY") 
+    def __init__(self, base_url: str = None, api_key: str = None, model: str = None):
+        base_url = base_url or os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
+        model = model or os.getenv("LLM_MODEL", "llama-2-7b") 
+        api_key = api_key or os.getenv("VLLM_API_KEY", "EMPTY") 
         super().__init__(api_key=api_key, base_url=base_url, model=model)
 
 class MockProvider:
@@ -88,7 +90,7 @@ class MockProvider:
         self.model = "mock-model"
         
     async def generate_response(self, messages: List[Dict], stream: bool = False):
-        mock_text = "This is a mock response. Please configure a valid LLM_PROVIDER (ollama, openai, gemini)."
+        mock_text = "This is a mock response. Please configure a valid LLM_PROVIDER in settings."
         if stream:
             async def generator():
                 for word in mock_text.split():
@@ -102,6 +104,10 @@ class MockProvider:
     def model_name(self) -> str:
         return self.model
 
+
+# -------------------------------------------------------------
+# LLM Service (Static Config)
+# -------------------------------------------------------------
 class LLMInferenceService:
     def __init__(self):
         self.provider_name = os.getenv("LLM_PROVIDER", "ollama").lower()

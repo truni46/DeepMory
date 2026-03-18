@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
     // Check auth on mount
     useEffect(() => {
         const checkAuth = async () => {
-            const token = localStorage.getItem('access_token');
+            const token = localStorage.getItem('accessToken');
             if (token) {
                 try {
                     // Verify token and get user info
@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
                     setIsAuthenticated(true);
                 } catch (error) {
                     console.error('Auth check failed:', error);
-                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('accessToken');
                     setUser(null);
                     setIsAuthenticated(false);
                 }
@@ -46,10 +46,10 @@ export const AuthProvider = ({ children }) => {
                 body: formData.toString(),
             });
 
-            const { access_token, user: userData } = response;
+            const { accessToken, user: userData } = response;
 
             // Save token
-            localStorage.setItem('access_token', access_token);
+            localStorage.setItem('accessToken', accessToken);
 
             setUser(userData);
             setIsAuthenticated(true);
@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }) => {
 
     // Logout function
     const logout = () => {
-        localStorage.removeItem('access_token');
+        localStorage.removeItem('accessToken');
         setUser(null);
         setIsAuthenticated(false);
     };

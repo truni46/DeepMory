@@ -5,112 +5,104 @@ from config.database import db
 
 class ConversationRepository:
     
-    async def create(self, user_id: str, title: str = None, project_id: str = None) -> Dict:
+    async def create(self, userId: str, title: str = None, projectId: str = None) -> Dict:
         """Create a new conversation"""
         import uuid
-        conversation_id = str(uuid.uuid4())
+        conversationId = str(uuid.uuid4())
         title = title or "New Conversation"
         now = datetime.now()
         
         conversation = {
-            'id': conversation_id,
-            'user_id': user_id,
-            'project_id': project_id,
+            'id': conversationId,
+            'userId': userId,
+            'projectId': projectId,
             'title': title,
-            'created_at': now.isoformat(),
-            'updated_at': now.isoformat(),
+            'createdAt': now.isoformat(),
+            'updatedAt': now.isoformat(),
             'metadata': {}
         }
 
-        if db.use_database and db.pool:
+        if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
-                # Assuming user_id column exists based on previous repository.py content
-                # Note: database.py didn't use user_id, but repository.py did. 
-                # We should reconcile this. The current schema likely has user_id.
-                from config.logger import logger
-                logger.info(f"DEBUG REPO CONVERSATION: created_at type: {type(now)}, value: {now}")
-                
                 row = await conn.fetchrow(
-                    """INSERT INTO conversations (id, user_id, project_id, title, metadata, created_at, updated_at) 
+                    """INSERT INTO conversations (id, "userId", "projectId", title, metadata, "createdAt", "updatedAt") 
                        VALUES ($1, $2, $3, $4, $5, $6, $7) 
                        RETURNING *""",
-                    conversation_id, user_id, project_id, title, json.dumps({}), now, now
+                    conversationId, userId, projectId, title, json.dumps({}), now, now
                 )
                 return dict(row)
         else:
             data = db.read_json('conversations')
-            data[conversation_id] = conversation
+            data[conversationId] = conversation
             db.write_json('conversations', data)
             return conversation
 
-    async def get_by_user(self, user_id: str) -> List[Dict]:
+    async def getByUser(self, userId: str) -> List[Dict]:
         """Get conversations for a user"""
-        if db.use_database and db.pool:
+        if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM conversations WHERE user_id = $1 ORDER BY updated_at DESC", 
-                    user_id
+                    """SELECT * FROM conversations WHERE "userId" = $1 ORDER BY "updatedAt" DESC""", 
+                    userId
                 )
                 return [dict(row) for row in rows]
         else:
             data = db.read_json('conversations')
-            # Filter by user_id if present in JSON data
-            user_convs = [
+            userConvs = [
                 c for c in data.values() 
-                if c.get('user_id') == user_id or str(c.get('user_id')) == str(user_id)
+                if c.get('userId') == userId or str(c.get('userId')) == str(userId)
             ]
-            # Sort by updated_at descending
-            user_convs.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
-            return user_convs
+            userConvs.sort(key=lambda x: x.get('updatedAt', ''), reverse=True)
+            return userConvs
 
-    async def get_by_id(self, conversation_id: str, user_id: str) -> Optional[Dict]:
+    async def getById(self, conversationId: str, userId: str) -> Optional[Dict]:
         """Get conversation by ID and verify user ownership"""
-        if db.use_database and db.pool:
+        if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT * FROM conversations WHERE id = $1 AND user_id = $2",
-                    conversation_id, user_id
+                    """SELECT * FROM conversations WHERE id = $1 AND "userId" = $2""",
+                    conversationId, userId
                 )
                 return dict(row) if row else None
         else:
             data = db.read_json('conversations')
-            conv = data.get(conversation_id)
-            if conv and (str(conv.get('user_id')) == str(user_id)):
+            conv = data.get(conversationId)
+            if conv and (str(conv.get('userId')) == str(userId)):
                 return conv
             return None
 
-    async def update(self, conversation_id: str, user_id: str, updates: Dict) -> Optional[Dict]:
+    async def update(self, conversationId: str, userId: str, updates: Dict) -> Optional[Dict]:
         """Update a conversation"""
         now = datetime.now()
         
-        if db.use_database and db.pool:
+        if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
-                set_clauses = []
+                setClauses = []
                 values = []
-                param_count = 1
+                paramCount = 1
                 
                 for key, value in updates.items():
-                    set_clauses.append(f"{key} = ${param_count}")
+                    setClauses.append(f'"{key}" = ${paramCount}')
                     if isinstance(value, (dict, list)):
                         values.append(json.dumps(value))
                     else:
                         values.append(value)
-                    param_count += 1
+                    paramCount += 1
                 
-                if not set_clauses:
-                    return await self.get_by_id(conversation_id, user_id)
+                if not setClauses:
+                    return await self.getById(conversationId, userId)
 
-                set_clauses.append(f"updated_at = ${param_count}")
+                setClauses.append(f'"updatedAt" = ${paramCount}')
                 values.append(now)
-                param_count += 1
+                paramCount += 1
                 
-                values.append(conversation_id)
-                values.append(user_id)
+                values.append(conversationId)
+                values.append(userId)
                 
                 query = f"""
                     UPDATE conversations 
-                    SET {', '.join(set_clauses)}
-                    WHERE id = ${param_count} AND user_id = ${param_count + 1}
+                    SET {', '.join(setClauses)}
+                    WHERE id = ${paramCount} AND "userId" = ${paramCount + 1}
                     RETURNING *
                 """
                 
@@ -118,43 +110,43 @@ class ConversationRepository:
                 return dict(row) if row else None
         else:
             data = db.read_json('conversations')
-            if conversation_id in data:
-                conv = data[conversation_id]
-                if str(conv.get('user_id')) == str(user_id):
+            if conversationId in data:
+                conv = data[conversationId]
+                if str(conv.get('userId')) == str(userId):
                     conv.update(updates)
-                    conv['updated_at'] = now.isoformat()
+                    conv['updatedAt'] = now.isoformat()
                     db.write_json('conversations', data)
                     return conv
             return None
 
-    async def delete(self, conversation_id: str, user_id: str) -> bool:
+    async def delete(self, conversationId: str, userId: str) -> bool:
         """Delete a conversation"""
-        if db.use_database and db.pool:
+        if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
-                # Delete messages first
-                await conn.execute("DELETE FROM messages WHERE conversation_id = $1", conversation_id)
-                
+                await conn.execute(
+                    """DELETE FROM messages WHERE "conversationId" = $1""",
+                    conversationId
+                )
                 result = await conn.execute(
-                    "DELETE FROM conversations WHERE id = $1 AND user_id = $2",
-                    conversation_id, user_id
+                    """DELETE FROM conversations WHERE id = $1 AND "userId" = $2""",
+                    conversationId, userId
                 )
                 return result == "DELETE 1"
         else:
             data = db.read_json('conversations')
-            if conversation_id in data:
-                conv = data[conversation_id]
-                if str(conv.get('user_id')) == str(user_id):
-                    del data[conversation_id]
+            if conversationId in data:
+                conv = data[conversationId]
+                if str(conv.get('userId')) == str(userId):
+                    del data[conversationId]
                     db.write_json('conversations', data)
                     
-                    # Also delete messages
-                    messages_data = db.read_json('messages')
-                    messages_data = {
-                        k: v for k, v in messages_data.items()
-                        if v.get('conversation_id') != conversation_id
+                    messagesData = db.read_json('messages')
+                    messagesData = {
+                        k: v for k, v in messagesData.items()
+                        if v.get('conversationId') != conversationId
                     }
-                    db.write_json('messages', messages_data)
+                    db.write_json('messages', messagesData)
                     return True
             return False
             
-conversation_repository = ConversationRepository()
+conversationRepository = ConversationRepository()

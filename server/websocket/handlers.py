@@ -1,7 +1,8 @@
 import socketio
-from modules.messages.service import message_service
-from modules.memory.history_service import history_service
+from modules.message.service import messageService
+from modules.memory.historyService import historyService
 from config.logger import logger
+from datetime import datetime
 
 # Create Socket.IO server
 sio = socketio.AsyncServer(
@@ -34,36 +35,24 @@ async def sendMessage(sid, data):
     """Handle incoming message from client"""
     try:
         message = data.get('message')
-        conversation_id = data.get('conversationId')
+        conversationId = data.get('conversationId')
         
-        logger.chat(f"WebSocket message received from {sid}: conversation={conversation_id}")
+        logger.chat(f"WebSocket message received from {sid}: conversation={conversationId}")
         
-        # Validate message
-        validation = message_service.validate_message(message)
+        validation = messageService.validateMessage(message)
         if not validation['valid']:
             await sio.emit('error', {'message': '; '.join(validation['errors'])}, room=sid)
             return
         
-        # Send typing indicator
         await sio.emit('typing', {'isTyping': True}, room=sid)
         
-        # Get conversation history
-        history = await history_service.get_chat_history(conversation_id)
+        history = await historyService.getChatHistory(conversationId)
+        await historyService.saveMessage(conversationId, 'user', message)
         
-        # Save user message
-        await history_service.save_message(conversation_id, 'user', message)
+        response = await messageService.generateAiResponse(message, history)
+        await historyService.saveMessage(conversationId, 'assistant', response)
         
-        # Generate AI response
-        response = await message_service.generate_ai_response(message, history)
-        
-        # Save assistant message
-        await history_service.save_message(conversation_id, 'assistant', response)
-        
-        # Stop typing indicator
         await sio.emit('typing', {'isTyping': False}, room=sid)
-        
-        # Send response
-        from datetime import datetime
         await sio.emit('receiveMessage', {
             'role': 'assistant',
             'content': response,
@@ -81,38 +70,29 @@ async def sendMessageStreaming(sid, data):
     """Handle streaming message request"""
     try:
         message = data.get('message')
-        conversation_id = data.get('conversationId')
+        conversationId = data.get('conversationId')
         
-        logger.chat(f"WebSocket streaming message received from {sid}: conversation={conversation_id}")
+        logger.chat(f"WebSocket streaming message received from {sid}: conversation={conversationId}")
         
-        # Validate message
-        validation = message_service.validate_message(message)
+        validation = messageService.validateMessage(message)
         if not validation['valid']:
             await sio.emit('error', {'message': '; '.join(validation['errors'])}, room=sid)
             return
         
-        # Send typing indicator
         await sio.emit('typing', {'isTyping': True}, room=sid)
         
-        # Get conversation history
-        history = await history_service.get_chat_history(conversation_id)
+        history = await historyService.getChatHistory(conversationId)
+        await historyService.saveMessage(conversationId, 'user', message)
         
-        # Save user message
-        await history_service.save_message(conversation_id, 'user', message)
-        
-        # Stream response
-        full_response = ""
-        async for chunk in message_service.generate_streaming_response(message, history):
-            full_response += chunk
+        fullResponse = ""
+        async for chunk in messageService.generateStreamingResponse(message, history, conversationId=conversationId):
+            fullResponse += chunk
             await sio.emit('messageChunk', {'chunk': chunk}, room=sid)
         
-        # Save assistant message
-        await history_service.save_message(conversation_id, 'assistant', full_response)
+        await historyService.saveMessage(conversationId, 'assistant', fullResponse)
         
-        # Send completion
-        from datetime import datetime
         await sio.emit('messageComplete', {
-            'fullResponse': full_response,
+            'fullResponse': fullResponse,
             'timestamp': str(datetime.now())
         }, room=sid)
         
@@ -127,12 +107,8 @@ async def sendMessageStreaming(sid, data):
 @sio.event
 async def typing(sid, data):
     """Handle user typing indicator"""
-    is_typing = data.get('isTyping', False)
+    isTyping = data.get('isTyping', False)
     await sio.emit('userTyping', {
         'socketId': sid,
-        'isTyping': is_typing
+        'isTyping': isTyping
     }, skip_sid=sid)
-
-
-# Import datetime for timestamps
-from datetime import datetime

@@ -61,4 +61,4 @@ class SettingsService:
             raise
 
 # Export instance
-settings_service = SettingsService()
+settingsService = SettingsService()

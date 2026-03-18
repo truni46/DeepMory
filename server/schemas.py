@@ -6,15 +6,15 @@ class UserRegister(BaseModel):
     email: str
     password: str
     username: Optional[str] = None
-    full_name: Optional[str] = None
+    fullName: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: str
     password: str
 
 class Token(BaseModel):
-    access_token: str
-    token_type: str
+    accessToken: str
+    tokenType: str
     user: Dict[str, Any]
 
 # Project Schemas
@@ -26,11 +26,11 @@ class ProjectCreate(BaseModel):
 # Conversation Schemas
 class ConversationCreate(BaseModel):
     title: Optional[str] = None
-    project_id: Optional[str] = None
+    projectId: Optional[str] = None
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
-    project_id: Optional[str] = None
+    projectId: Optional[str] = None
 
 # Message Schemas
 class MessageRequest(BaseModel):

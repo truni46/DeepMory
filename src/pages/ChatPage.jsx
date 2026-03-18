@@ -24,6 +24,7 @@ export default function ChatPage() {
     const [streamingMessage, setStreamingMessage] = useState('');
 
     const messagesEndRef = useRef(null);
+    const justCreatedConversationId = useRef(null);
 
     // Scroll to bottom
     const scrollToBottom = () => {
@@ -47,7 +48,14 @@ export default function ChatPage() {
     // Load messages when active conversation changes
     useEffect(() => {
         if (activeConversationId) {
-            loadMessages(activeConversationId);
+            // If checking a conversation we just created locally, don't fetch from backend (it's empty).
+            // Just clear current messages so handleSendMessage's optimistic update can populate it.
+            if (activeConversationId === justCreatedConversationId.current) {
+                setMessages([]);
+                justCreatedConversationId.current = null;
+            } else {
+                loadMessages(activeConversationId);
+            }
         } else {
             setMessages([]);
         }
@@ -118,6 +126,7 @@ export default function ChatPage() {
 
                 const newConv = await conversationService.createConversation(title);
                 currentId = newConv.id;
+                justCreatedConversationId.current = currentId;
 
                 await loadConversations(); // Refresh layout list
                 setActiveConversationId(currentId); // Update layout active ID
@@ -136,36 +145,35 @@ export default function ChatPage() {
         setIsTyping(true);
 
         try {
-            if (settings.communication_mode === 'websocket') {
-                websocketService.sendMessageStreaming(messageText, currentId);
-            } else {
-                setStreamingMessage('');
-                await streamingService.sendMessage(
-                    messageText,
-                    currentId,
-                    (chunk) => setStreamingMessage(prev => prev + chunk),
-                    (fullResponse) => {
-                        const aiMessage = {
-                            role: 'assistant',
-                            content: fullResponse,
-                            created_at: new Date().toISOString()
-                        };
-                        setMessages(prev => [...prev, aiMessage]);
-                        setStreamingMessage('');
-                        setIsTyping(false);
+            // Force SSE Streaming as per user request
+            // if (settings.communication_mode === 'websocket') { ... } 
 
-                        // Refresh to show updated title if needed
-                        if (currentId) {
-                            setTimeout(() => loadConversations(), 2500);
-                        }
-                    },
-                    (error) => {
-                        logger.error('Stream error:', error);
-                        setIsTyping(false);
-                        setStreamingMessage('');
+            setStreamingMessage('');
+            await streamingService.sendMessage(
+                messageText,
+                currentId,
+                (chunk) => setStreamingMessage(prev => prev + chunk),
+                (fullResponse) => {
+                    const aiMessage = {
+                        role: 'assistant',
+                        content: fullResponse,
+                        created_at: new Date().toISOString()
+                    };
+                    setMessages(prev => [...prev, aiMessage]);
+                    setStreamingMessage('');
+                    setIsTyping(false);
+
+                    // Refresh to show updated title if needed
+                    if (currentId) {
+                        setTimeout(() => loadConversations(), 2500);
                     }
-                );
-            }
+                },
+                (error) => {
+                    logger.error('Stream error:', error);
+                    setIsTyping(false);
+                    setStreamingMessage('');
+                }
+            );
         } catch (error) {
             console.error(error);
             setIsTyping(false);

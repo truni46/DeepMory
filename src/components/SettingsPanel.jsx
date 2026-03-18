@@ -35,6 +35,7 @@ export default function SettingsPanel({ isOpen, onClose, settings, onSave, conne
 
                 {/* Settings Content */}
                 <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-2">
+
                     {/* Communication Mode */}
                     <div>
                         <label className="block text-sm font-medium text-text-secondary mb-2">

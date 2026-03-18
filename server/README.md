@@ -67,11 +67,11 @@ server_python/
 ├── routes/
 │   └── api.py           # API endpoints
 ├── services/
-│   ├── message_service.py      # Message processing
-│   ├── conversation_service.py # Conversation management
-│   ├── history_service.py      # Chat history
-│   ├── settings_service.py     # Settings management
-│   └── export_service.py       # Export functionality
+│   ├── messageService.py      # Message processing
+│   ├── conversationService.py # Conversation management
+│   ├── historyService.py      # Chat history
+│   ├── settingsService.py     # Settings management
+│   └── exportService.py       # Export functionality
 ├── websocket/
 │   └── handlers.py      # WebSocket event handlers
 ├── migrations/

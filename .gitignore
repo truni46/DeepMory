@@ -30,3 +30,7 @@ server/migrations/*.sql
 
 # Build files
 *.tsbuildinfo
+
+# Testing files
+server/testing/*
+

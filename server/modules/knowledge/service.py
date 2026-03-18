@@ -10,76 +10,83 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 class DocumentService:
     
-    async def upload_document(self, user_id: str, file_obj, filename: str, project_id: Optional[str] = None) -> Dict:
+    async def upload_document(self, userId: str, fileObj, filename: str, projectId: Optional[str] = None) -> Dict:
         """Save uploaded file and create record"""
-        # Save file to disk
-        file_ext = os.path.splitext(filename)[1]
-        stored_filename = f"{user_id}_{filename}"
-        if project_id:
-             stored_filename = f"{user_id}_{project_id}_{filename}"
+        fileExt = os.path.splitext(filename)[1]
+        storedFilename = f"{userId}_{filename}"
+        if projectId:
+             storedFilename = f"{userId}_{projectId}_{filename}"
              
-        file_path = UPLOAD_DIR / stored_filename
+        filePath = UPLOAD_DIR / storedFilename
         
         try:
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file_obj.file, buffer)
+            with open(filePath, "wb") as buffer:
+                shutil.copyfileobj(fileObj.file, buffer)
         finally:
-            file_obj.file.close()
+            fileObj.file.close()
             
-        # Create DB record
         if not db.pool:
             raise Exception("Database not connected")
             
         async with db.pool.acquire() as conn:
             row = await conn.fetchrow(
-                """INSERT INTO documents (project_id, user_id, filename, file_path, file_type, embedding_status) 
+                """INSERT INTO documents ("projectId", "userId", filename, "filePath", "fileType", "embeddingStatus") 
                    VALUES ($1, $2, $3, $4, $5, 'pending') 
                    RETURNING *""",
-                project_id, user_id, filename, str(file_path), file_ext
+                projectId, userId, filename, str(filePath), fileExt
             )
             return dict(row)
 
-    async def get_documents(self, project_id: str) -> List[Dict]:
+    async def get_documents(self, projectId: str) -> List[Dict]:
         """Get documents for a project"""
         if not db.pool:
             return []
             
         async with db.pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM documents WHERE project_id = $1 ORDER BY created_at DESC", project_id)
+            rows = await conn.fetch(
+                """SELECT * FROM documents WHERE "projectId" = $1 ORDER BY "createdAt" DESC""",
+                projectId
+            )
             return [dict(row) for row in rows]
             
-    async def get_user_documents(self, user_id: str) -> List[Dict]:
+    async def get_user_documents(self, userId: str) -> List[Dict]:
         """Get all documents for a user"""
         if not db.pool:
             return []
             
         async with db.pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM documents WHERE user_id = $1 ORDER BY created_at DESC", user_id)
+            rows = await conn.fetch(
+                """SELECT * FROM documents WHERE "userId" = $1 ORDER BY "createdAt" DESC""",
+                userId
+            )
             return [dict(row) for row in rows]
 
-    async def delete_document(self, user_id: str, document_id: str) -> bool:
-        """Delete a document by ID and user_id"""
+    async def delete_document(self, userId: str, documentId: str) -> bool:
+        """Delete a document by ID and userId"""
         if not db.pool:
             return False
             
         async with db.pool.acquire() as conn:
-            # First get the file path to delete from disk
-            row = await conn.fetchrow("SELECT file_path FROM documents WHERE id = $1 AND user_id = $2", document_id, user_id)
+            row = await conn.fetchrow(
+                """SELECT "filePath" FROM documents WHERE id = $1 AND "userId" = $2""",
+                documentId, userId
+            )
             if not row:
                 return False
                 
-            file_path = row['file_path']
+            filePath = row['filePath']
             
-            # Delete from DB
-            await conn.execute("DELETE FROM documents WHERE id = $1 AND user_id = $2", document_id, user_id)
+            await conn.execute(
+                """DELETE FROM documents WHERE id = $1 AND "userId" = $2""",
+                documentId, userId
+            )
             
-            # Delete from disk
             try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+                if os.path.exists(filePath):
+                    os.remove(filePath)
             except Exception as e:
-                logger.error(f"Failed to delete file {file_path}: {e}")
+                logger.error(f"Failed to delete file {filePath}: {e}")
                 
             return True
 
-document_service = DocumentService()
+documentService = DocumentService()

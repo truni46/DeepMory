@@ -18,7 +18,7 @@ class StreamingService {
      */
     async sendMessage(message, conversationId, onChunk, onComplete, onError) {
         try {
-            const response = await fetch(`${API_BASE_URL}/messages/stream`, {
+            const response = await fetch(`${API_BASE_URL}/messages/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

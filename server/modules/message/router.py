@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from typing import Dict
-from modules.messages.service import message_service
+from modules.message.service import messageService
 from common.deps import get_current_user
 from schemas import MessageRequest
 from config.logger import logger
@@ -9,39 +9,36 @@ import json
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
-@router.get("/{conversation_id}")
-async def get_conversation_history(conversation_id: str, user: Dict = Depends(get_current_user)):
-    # Optional: Verify conversation ownership
-    return await message_service.get_history(conversation_id)
+@router.get("/{conversationId}")
+async def getConversationHistory(conversationId: str, user: Dict = Depends(get_current_user)):
+    return await messageService.getHistory(conversationId)
 
-@router.post("/stream")
-async def send_message_stream(data: MessageRequest, user: Dict = Depends(get_current_user)):
+@router.post("/chat/completions")
+async def sendMessageStream(data: MessageRequest, user: Dict = Depends(get_current_user)):
     try:
-        # Validate message
-        validation = message_service.validate_message(data.message)
+        validation = messageService.validateMessage(data.message)
         if not validation['valid']:
             raise HTTPException(status_code=400, detail={"errors": validation['errors']})
         
-        async def event_generator():
-            full_response = ""
+        async def eventGenerator():
+            fullResponse = ""
             try:
-                # Stream usage
-                async for chunk in message_service.process_message_flow(
+                async for chunk in messageService.processMessageFlow(
                     str(user['id']), 
                     data.conversationId, 
                     data.message, 
                     data.projectId
                 ):
-                    full_response += chunk
+                    fullResponse += chunk
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                 
-                yield f"data: {json.dumps({'done': True, 'fullResponse': full_response})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'fullResponse': fullResponse})}\n\n"
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
         return StreamingResponse(
-            event_generator(),
+            eventGenerator(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

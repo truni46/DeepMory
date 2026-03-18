@@ -116,6 +116,6 @@ ai-tutor-web/
 Run verification scripts to ensure everything is working:
 
 ```bash
-python server/testing/verify_services.py
+python server/testing/verifyServices.py
 python server/testing/verify_api.py
 ```

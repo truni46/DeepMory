@@ -28,4 +28,4 @@ class RAGService:
         # Placeholder for vector search
         return ""
 
-rag_service = RAGService()
+ragService = RAGService()

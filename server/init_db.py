@@ -7,7 +7,7 @@ async def init_db():
     print("Connecting to database...")
     await db.connect()
     
-    if not db.use_database:
+    if not db.useDatabase:
         print("Database not enabled or connection failed.")
         return
 
