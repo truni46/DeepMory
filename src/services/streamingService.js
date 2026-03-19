@@ -18,11 +18,17 @@ class StreamingService {
      */
     async sendMessage(message, conversationId, onChunk, onComplete, onError) {
         try {
+            const token = localStorage.getItem('accessToken');
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${API_BASE_URL}/messages/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({ message, conversationId }),
             });
 

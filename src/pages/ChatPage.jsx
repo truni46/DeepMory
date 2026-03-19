@@ -49,9 +49,8 @@ export default function ChatPage() {
     useEffect(() => {
         if (activeConversationId) {
             // If checking a conversation we just created locally, don't fetch from backend (it's empty).
-            // Just clear current messages so handleSendMessage's optimistic update can populate it.
+            // Do NOT call setMessages([]) here, because handleSendMessage already optimistically appended the user's message!
             if (activeConversationId === justCreatedConversationId.current) {
-                setMessages([]);
                 justCreatedConversationId.current = null;
             } else {
                 loadMessages(activeConversationId);
@@ -87,7 +86,7 @@ export default function ChatPage() {
             const newMessage = {
                 role: 'assistant',
                 content: data.fullResponse,
-                created_at: new Date().toISOString()
+                createdAt: new Date().toISOString()
             };
             setMessages(prev => [...prev, newMessage]);
             setStreamingMessage('');
@@ -139,7 +138,7 @@ export default function ChatPage() {
         const userMessage = {
             role: 'user',
             content: messageText,
-            created_at: new Date().toISOString()
+            createdAt: new Date().toISOString()
         };
         setMessages(prev => [...prev, userMessage]);
         setIsTyping(true);
@@ -157,7 +156,7 @@ export default function ChatPage() {
                     const aiMessage = {
                         role: 'assistant',
                         content: fullResponse,
-                        created_at: new Date().toISOString()
+                        createdAt: new Date().toISOString()
                     };
                     setMessages(prev => [...prev, aiMessage]);
                     setStreamingMessage('');
@@ -239,7 +238,7 @@ export default function ChatPage() {
                                 message={{
                                     role: 'assistant',
                                     content: streamingMessage,
-                                    created_at: new Date().toISOString()
+                                    createdAt: new Date().toISOString()
                                 }}
                                 showTimestamp={false}
                             />

@@ -13,8 +13,8 @@ class UserLogin(BaseModel):
     password: str
 
 class Token(BaseModel):
-    accessToken: str
-    tokenType: str
+    access_token: str
+    token_type: str
     user: Dict[str, Any]
 
 # Project Schemas

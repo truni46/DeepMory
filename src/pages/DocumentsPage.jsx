@@ -139,7 +139,7 @@ export default function DocumentsPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-text-secondary">
-                                                {new Date(doc.created_at).toLocaleDateString()}
+                                                {new Date(doc.createdAt).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <button

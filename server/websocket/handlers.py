@@ -49,7 +49,7 @@ async def sendMessage(sid, data):
         history = await historyService.getChatHistory(conversationId)
         await historyService.saveMessage(conversationId, 'user', message)
         
-        response = await messageService.generateAiResponse(message, history)
+        response = await messageService.generateAIResponse(message, history)
         await historyService.saveMessage(conversationId, 'assistant', response)
         
         await sio.emit('typing', {'isTyping': False}, room=sid)

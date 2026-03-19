@@ -16,7 +16,7 @@ async def register(userData: UserRegister):
             data={"sub": str(user['id'])},
             expiresDelta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         )
-        return {"accessToken": accessToken, "tokenType": "bearer", "user": user}
+        return {"access_token": accessToken, "token_type": "bearer", "user": user}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -36,7 +36,7 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
         data={"sub": str(user['id'])},
         expiresDelta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    return {"accessToken": accessToken, "tokenType": "bearer", "user": user}
+    return {"access_token": accessToken, "token_type": "bearer", "user": user}
 
 @router.get("/me")
 async def readUsersMe(currentUser: Dict = Depends(get_current_user)):

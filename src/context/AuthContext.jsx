@@ -46,10 +46,10 @@ export const AuthProvider = ({ children }) => {
                 body: formData.toString(),
             });
 
-            const { accessToken, user: userData } = response;
+            const { access_token, user: userData } = response;
 
             // Save token
-            localStorage.setItem('accessToken', accessToken);
+            localStorage.setItem('accessToken', access_token);
 
             setUser(userData);
             setIsAuthenticated(true);

@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 
 from modules.message.repository import messageRepository
-from modules.llm.llmProvider import llm_provider
+from modules.llm.llmProvider import llmProvider
 from modules.memory.ragService import ragService
 from modules.memory.service import memoryService
 from modules.settings.service import settingsService
@@ -68,17 +68,27 @@ class MessageService:
         
         # 3. Stream LLM Response
         fullResponse = ""
-        async for chunk in llm_provider._stream_response(messages):
-            fullResponse += chunk
-            yield chunk
+        try:
+            async for chunk in llmProvider._stream_response(messages):
+                fullResponse += chunk
+                yield chunk
+        except Exception as e:
+            logger.error(f"LLM Error - userId: {userId}, conversationId: {conversationId}, Error: {e}")
+            errorMsg = "Xin lỗi, hiện tại hệ thống AI đang gặp sự cố kết nối hoặc phản hồi. Vui lòng thử lại sau."
+            if not fullResponse:
+                fullResponse = errorMsg
+                yield errorMsg
+            else:
+                fullResponse += f"\n\n[{errorMsg}]"
+                yield f"\n\n[{errorMsg}]"
             
         # 4. Save Assistant Response
-        await messageRepository.create(conversationId, "assistant", fullResponse, model=llm_provider.model, parentId=userMsg['id'])
+        await messageRepository.create(conversationId, "assistant", fullResponse, model=llmProvider.model, parentId=userMsg['id'])
         
         # 5. Background: Generate conversation title if new
         if len(history) <= 1:
             asyncio.create_task(
-                self.generateConversation_title(
+                self.generateConversationTitle(
                     conversationId, 
                     userId, 
                     content, 
@@ -110,7 +120,7 @@ class MessageService:
              yield chunk
 
             
-    async def generateAiResponse(self, message: str, history: List[Dict]) -> str:
+    async def generateAIResponse(self, message: str, history: List[Dict]) -> str:
         """Get full AI response (non-streaming)"""
         fullResponse = ""
         cid = "unknownConversation"
@@ -121,7 +131,7 @@ class MessageService:
              fullResponse += chunk
         return fullResponse
 
-    async def generateConversation_title(self, conversationId: str, userId: str, userMessage: str, aiResponse: str):
+    async def generateConversationTitle(self, conversationId: str, userId: str, userMessage: str, aiResponse: str):
         """Generate a short title for the conversation"""
         try:
             logger.info(f"Generating title for conversation {conversationId}")
@@ -132,7 +142,7 @@ class MessageService:
             ]
             
             title = ""
-            async for chunk in llm_provider._stream_response(prompt):
+            async for chunk in llmProvider._stream_response(prompt):
                 title += chunk
                 
             title = title.strip().strip('"')

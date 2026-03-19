@@ -51,7 +51,7 @@ export default function ChatInput({ onSend, disabled = false }) {
                         onKeyPress={handleKeyPress}
                         placeholder="Ask a question..."
                         disabled={disabled}
-                        className="flex-1 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2 ml-1"
+                        className="flex-1 bg-transparent text-sm md:text-[14.5px] text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2 ml-1"
                         rows={1}
                         style={{ minHeight: '24px' }}
                     />
@@ -79,7 +79,7 @@ export default function ChatInput({ onSend, disabled = false }) {
                 </div>
 
                 {/* Footer text */}
-                <div className="mt-3 text-center text-xs text-text-muted font-medium opacity-80">
+                <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
                     AI-Tutor can make mistakes, please check the response.
                 </div>
             </div>

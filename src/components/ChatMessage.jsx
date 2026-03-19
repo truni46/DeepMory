@@ -2,7 +2,7 @@ import ReactMarkdown from 'react-markdown';
 
 export default function ChatMessage({ message, showTimestamp = true }) {
     const isUser = message.role === 'user';
-    const timestamp = new Date(message.created_at || message.timestamp).toLocaleTimeString([], {
+    const timestamp = new Date(message.createdAt || message.timestamp).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit'
     });
