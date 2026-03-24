@@ -1,25 +1,15 @@
-from typing import List, Dict
-from config.database import db
-from config.logger import logger
+"""
+DEPRECATED — use modules.rag.ragService instead.
+This file is kept only to avoid breaking any remaining import references.
+"""
+import warnings
 
-class RAGService:
-    
-    async def processDocument(self, documentId: str):
-        """Process document for RAG (Chunking + Embedding)"""
-        logger.info(f"Processing document {documentId} for RAG...")
-        
-        if not db.pool:
-            return
-            
-        async with db.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE documents SET \"embeddingStatus\" = 'completed' WHERE id = $1",
-                documentId
-            )
+warnings.warn(
+    "modules.memory.ragService is deprecated. Import from modules.rag.ragService instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-    async def searchContext(self, query: str, projectId: str, limit: int = 5) -> str:
-        """Search similar context for a query"""
-        # Placeholder for vector search
-        return ""
+from modules.rag.ragService import ragService  # re-export
 
-ragService = RAGService()
+__all__ = ["ragService"]

@@ -23,7 +23,7 @@ class HistoryService:
         """Save a message to history"""
         try:
             messageId = str(uuid.uuid4())
-            message = await message_repository.create(
+            message = await messageRepository.create(
                 conversationId=conversationId,
                 role=role,
                 content=content,

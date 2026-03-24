@@ -14,9 +14,9 @@ async def uploadDocument(
     try:
         doc = await documentService.uploadDocument(
             userId=str(currentUser['id']),
-            projectId=projectId,
             fileObj=file,
-            filename=file.filename
+            filename=file.filename,
+            projectId=projectId,
         )
         return doc
     except Exception as e:
@@ -27,7 +27,7 @@ async def getDocuments(
     currentUser: dict = Depends(get_current_user)
 ):
     try:
-        return await documentService.getUserDocuments(userId=str(currentUser['id']))
+        return await documentService.getUserDocuments(userId=str(currentUser["id"]))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
