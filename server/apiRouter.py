@@ -6,6 +6,7 @@ from modules.message.router import router as messagesRouter
 from modules.settings.router import router as settingsRouter
 from modules.knowledge.router import router as knowledgeRouter
 from modules.rag.router import router as ragRouter
+from modules.memory.router import router as memoryRouter
 
 router = APIRouter(prefix="/api")
 
@@ -16,3 +17,4 @@ router.include_router(messagesRouter)
 router.include_router(settingsRouter)
 router.include_router(knowledgeRouter)
 router.include_router(ragRouter)
+router.include_router(memoryRouter)

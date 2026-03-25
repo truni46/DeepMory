@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from typing import Dict
 from modules.message.service import messageService
-from common.deps import get_current_user
+from common.deps import getCurrentUser
 from schemas import MessageRequest
 from config.logger import logger
 import json
@@ -10,11 +10,11 @@ import json
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
 @router.get("/{conversationId}")
-async def getConversationHistory(conversationId: str, user: Dict = Depends(get_current_user)):
+async def getConversationHistory(conversationId: str, user: Dict = Depends(getCurrentUser)):
     return await messageService.getHistory(conversationId)
 
 @router.post("/chat/completions")
-async def sendMessageStream(data: MessageRequest, user: Dict = Depends(get_current_user)):
+async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurrentUser)):
     try:
         validation = messageService.validateMessage(data.message)
         if not validation['valid']:

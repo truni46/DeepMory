@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import Sidebar from '../components/Sidebar';
-import SettingsPanel from '../components/SettingsPanel';
 import logger from '../utils/logger';
 
 export default function ChatLayout() {
@@ -15,7 +14,6 @@ export default function ChatLayout() {
     // Lifted State
     const [conversations, setConversations] = useState([]);
     const [activeConversationId, setActiveConversationId] = useState(null);
-    const [showSettings, setShowSettings] = useState(false);
     const [settings, setSettings] = useState({
         communication_mode: 'websocket',
         show_timestamps: true,
@@ -151,7 +149,6 @@ export default function ChatLayout() {
                 onNewChat={handleNewChat}
                 onSelectConversation={handleSelectConversation}
                 onDeleteConversation={handleDeleteConversation}
-                onOpenSettings={() => setShowSettings(true)}
                 user={user}
                 deletingId={deletingId}
             />
@@ -164,14 +161,6 @@ export default function ChatLayout() {
                     setActiveConversationId
                 }} />
             </div>
-
-            <SettingsPanel
-                isOpen={showSettings}
-                onClose={() => setShowSettings(false)}
-                settings={settings}
-                onSave={handleSaveSettings}
-                connectionStatus="connected" // Simplified for now
-            />
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (

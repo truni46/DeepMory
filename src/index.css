@@ -3,8 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Responsive base font-size:
+   *   14.5px at 1366px (14" laptop) — scales linearly via vw.
+   *   min 13px (≤ ~1024px), max 16px (≥ ~1920px).
+   *   Formula: 14.5 / 1366 ≈ 1.061vw → clamp(13px, 1.061vw, 16px)
+   */
+  html {
+    font-size: clamp(13px, 1.061vw, 16px);
+  }
+
   body {
     @apply text-text-primary font-sans antialiased;
+    font-size: 1rem; /* inherits from html clamp */
   }
 
   #root {

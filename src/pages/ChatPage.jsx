@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FiLogOut } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
@@ -9,18 +8,15 @@ import conversationService from '../services/conversationService';
 import streamingService from '../services/streamingService';
 import websocketService from '../services/websocketService';
 import logger from '../utils/logger';
-import { useAuth } from '../context/AuthContext';
 
 export default function ChatPage() {
     // Context from Layout
     const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
-    const { logout } = useAuth();
 
     // Local State (only chat content)
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
-    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [streamingMessage, setStreamingMessage] = useState('');
 
     const messagesEndRef = useRef(null);
@@ -196,13 +192,6 @@ export default function ChatPage() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    <button
-                        onClick={() => setShowLogoutConfirm(true)}
-                        className="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-sm hover:bg-red-100 transition-colors flex items-center gap-2"
-                    >
-                        <FiLogOut className="w-4 h-4" />
-                        <span>Logout</span>
-                    </button>
                 </div>
             </div>
 
@@ -249,37 +238,6 @@ export default function ChatPage() {
             </div>
 
             <ChatInput onSend={handleSendMessage} disabled={isTyping} />
-
-            {/* Logout Confirmation Modal */}
-            {showLogoutConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                    <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-border">
-                        <div className="flex items-center space-x-3 mb-4 text-red-600">
-                            <div className="p-2 bg-red-100 rounded-full">
-                                <FiLogOut className="w-6 h-6" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-900">Confirm Logout</h3>
-                        </div>
-                        <p className="text-text-secondary mb-6">
-                            Are you sure you want to log out? You will need to sign in again to access your conversations.
-                        </p>
-                        <div className="flex space-x-3">
-                            <button
-                                onClick={() => setShowLogoutConfirm(false)}
-                                className="flex-1 px-4 py-2 bg-white border border-border text-text-secondary hover:bg-bg-secondary rounded-lg transition-colors font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={logout}
-                                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium shadow-sm"
-                            >
-                                Logout
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

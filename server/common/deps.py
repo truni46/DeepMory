@@ -11,7 +11,7 @@ ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> Dict:
+async def getCurrentUser(token: Annotated[str, Depends(oauth2_scheme)]) -> Dict:
     credentialsException = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

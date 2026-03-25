@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import DocumentsPage from './pages/DocumentsPage';
 import ChatPage from './pages/ChatPage';
+import SettingsPage from './pages/SettingsPage';
 import ChatLayout from './layouts/ChatLayout';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
                     <Route element={<ChatLayout />}>
                         <Route path="/" element={<ChatPage />} />
                         <Route path="/documents" element={<DocumentsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
                     </Route>
 
                     {/* Catch all */}
