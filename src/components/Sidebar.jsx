@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ConversationList from './ConversationList';
+import UserMenu from './UserMenu';
 import logo from '../assets/logo.png';
 
 export default function Sidebar({
@@ -9,7 +10,6 @@ export default function Sidebar({
     onNewChat = () => { },
     onSelectConversation = () => { },
     onDeleteConversation = () => { },
-    onOpenSettings = () => { },
     user,
     deletingId
 }) {
@@ -142,17 +142,7 @@ export default function Sidebar({
             {/* User Profile - Bottom */}
             {isExpanded && (
                 <div className="p-3 border-t border-border">
-                    <button
-                        onClick={onOpenSettings}
-                        className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors"
-                    >
-                        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold">
-                            {user?.fullName ? user.fullName.charAt(0).toUpperCase() : (user?.fullName?.charAt(0).toUpperCase() || 'U')}
-                        </div>
-                        <span className="text-sm md:text-[14.5px] text-text-primary font-medium truncate">
-                            {user?.fullName || user?.fullName || 'User'}
-                        </span>
-                    </button>
+                    <UserMenu user={user} />
                 </div>
             )}
         </div>

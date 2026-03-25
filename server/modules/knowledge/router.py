@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from typing import List, Optional
-from common.deps import get_current_user
+from common.deps import getCurrentUser
 from modules.knowledge.service import documentService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 async def uploadDocument(
     file: UploadFile = File(...),
     projectId: Optional[str] = None,
-    currentUser: dict = Depends(get_current_user)
+    currentUser: dict = Depends(getCurrentUser)
 ):
     try:
         doc = await documentService.uploadDocument(
@@ -24,7 +24,7 @@ async def uploadDocument(
 
 @router.get("/documents")
 async def getDocuments(
-    currentUser: dict = Depends(get_current_user)
+    currentUser: dict = Depends(getCurrentUser)
 ):
     try:
         return await documentService.getUserDocuments(userId=str(currentUser["id"]))
@@ -34,7 +34,7 @@ async def getDocuments(
 @router.delete("/documents/{documentId}")
 async def deleteDocument(
     documentId: str,
-    currentUser: dict = Depends(get_current_user)
+    currentUser: dict = Depends(getCurrentUser)
 ):
     try:
         success = await documentService.deleteDocument(
