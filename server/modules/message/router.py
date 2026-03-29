@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from typing import Dict
 from modules.message.service import messageService
+from modules.agents.service import agentService
 from common.deps import getCurrentUser
 from schemas import MessageRequest
 from config.logger import logger
@@ -16,6 +17,14 @@ async def getConversationHistory(conversationId: str, user: Dict = Depends(getCu
 @router.post("/chat/completions")
 async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurrentUser)):
     try:
+        if data.message.startswith("/"):
+            task = await agentService.runFromCommand(
+                userId=str(user["id"]),
+                conversationId=data.conversationId,
+                command=data.message,
+            )
+            return {"taskId": task.get("id"), "streaming": True, "agentTask": True}
+
         validation = messageService.validateMessage(data.message)
         if not validation['valid']:
             raise HTTPException(status_code=400, detail={"errors": validation['errors']})
