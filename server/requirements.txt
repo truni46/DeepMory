@@ -8,6 +8,7 @@ anyio==4.13.0
 ascii_colors==0.11.21
 asyncpg==0.31.0
 attrs==26.1.0
+bcrypt==5.0.0
 bidict==0.23.1
 certifi==2026.2.25
 cffi==2.0.0
@@ -73,6 +74,7 @@ portalocker==3.2.0
 propcache==0.4.1
 proto-plus==1.27.2
 protobuf==5.29.6
+psycopg2-binary==2.9.11
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
 pycparser==3.0
