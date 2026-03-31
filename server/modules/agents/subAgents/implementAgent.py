@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import time
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
 
 from config.logger import logger
 from modules.agents.deepMoryLLM import deepMoryLLM
 from modules.agents.memory.agentMemory import agentMemory
-from modules.agents.orchestrator.taskState import TaskState
+from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
+from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import IMPLEMENT_TOOLS
 
+_reactAgent = create_agent(deepMoryLLM, IMPLEMENT_TOOLS)
 
-async def implementNode(state: TaskState) -> dict:
-    """Implement Agent: executes the plan by writing code or documents."""
+
+async def implementNode(state: dict) -> dict:
+    """Implement Agent: dynamically generates implementation tasks, then executes each."""
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
@@ -28,25 +34,49 @@ async def implementNode(state: TaskState) -> dict:
                 f"{testingResult.get('output', 'Unknown failure')}"
             )
 
-        messages = [
-            SystemMessage(content=(
-                "You are an Implement Agent. Execute the given plan by writing code or documents. "
-                "Use codeWriter for code files, fileWriter for text/markdown, shellRunner to run commands. "
-                f"Tech preferences from past work:\n{proceduralText}"
-            )),
-            HumanMessage(content=(
-                f"Goal: {goal}\nPlan: {plan}{retryContext}\n\n"
-                "Implement this plan now."
-            )),
-        ] + list(state.get("messages", []))
+        conversationMessages = extractConversationContext(state.get("messages", []))
 
-        llm = deepMoryLLM.bind_tools(IMPLEMENT_TOOLS)
-        response = await llm.ainvoke(messages)
+        tasks = await taskRunner.generateTasks("implement", f"{goal}{retryContext}", conversationMessages)
+        await taskRunner.reportTasksGenerated(taskId, "implement", tasks)
+
+        allNewMessages = []
+        toolsUsed = []
+
+        for i, task in enumerate(tasks):
+            await taskRunner.reportTaskStarted(taskId, "implement", i)
+            startTime = time.time()
+
+            inputMessages = [
+                SystemMessage(content=(
+                    "You are an Implement Agent. Execute tasks by writing code or documents. "
+                    "Use codeWriter for code files, fileWriter for text/markdown, shellRunner to run commands.\n\n"
+                    f"Tech preferences:\n{proceduralText}"
+                )),
+                *conversationMessages,
+                HumanMessage(content=(
+                    f"Goal: {goal}\nPlan: {plan}\n\n"
+                    f"Implementation task: {task['description']}"
+                )),
+            ]
+
+            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            newMsgs = result["messages"][len(inputMessages):]
+            allNewMessages.extend(newMsgs)
+
+            for msg in newMsgs:
+                if getattr(msg, "type", None) == "ai" and hasattr(msg, "tool_calls") and msg.tool_calls:
+                    toolsUsed.extend(tc.get("name", "") for tc in msg.tool_calls)
+
+            taskResult = extractLastAIContent(newMsgs)
+            durationMs = int((time.time() - startTime) * 1000)
+            await taskRunner.reportTaskCompleted(taskId, "implement", i, taskResult, durationMs)
+
+        finalContent = extractLastAIContent(allNewMessages)
 
         implementationResult = {
-            "output": response.content,
+            "output": finalContent,
             "iterationCount": iterationCount,
-            "toolCalls": [tc.get("name") for tc in (response.tool_calls if hasattr(response, "tool_calls") and response.tool_calls else [])],
+            "toolCalls": toolsUsed,
         }
 
         await agentMemory.writeProcedural(
@@ -55,12 +85,11 @@ async def implementNode(state: TaskState) -> dict:
             metadata={"goal": goal, "iteration": iterationCount},
         )
 
-        newMessages = list(state.get("messages", [])) + [response]
         return {
             "implementationResult": implementationResult,
             "currentAgent": "implement",
             "iterationCount": iterationCount + 1,
-            "messages": newMessages,
+            "messages": allNewMessages,
         }
     except Exception as e:
         logger.error(f"implementNode failed taskId={taskId}: {e}")

@@ -44,7 +44,7 @@ async def supervisorNode(state: TaskState) -> dict:
             f"Research findings: {'yes' if state.get('researchFindings') else 'no'}\n"
             f"Plan: {'yes' if state.get('plan') else 'no'}\n"
             f"Implementation: {'yes' if state.get('implementationResult') else 'no'}\n"
-            f"Testing: {'passed' if state.get('testingResult', {}).get('passed') else ('failed' if state.get('testingResult') else 'not run')}\n"
+            f"Testing: {'passed' if (state.get('testingResult') or {}).get('passed') else ('failed' if state.get('testingResult') else 'not run')}\n"
             f"Final report: {'yes' if state.get('finalReport') else 'no'}\n"
             f"Iteration: {state.get('iterationCount', 0)}/{state.get('maxIterations', 10)}\n"
             f"Status: {state.get('status', 'running')}\n"

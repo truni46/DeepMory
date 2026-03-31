@@ -36,6 +36,7 @@ def buildInitialState(
     goal: str,
     conversationId: Optional[str] = None,
     projectId: Optional[str] = None,
+    messages: Optional[list[BaseMessage]] = None,
 ) -> TaskState:
     """Construct the initial TaskState for a new agent task."""
     return TaskState(
@@ -49,7 +50,7 @@ def buildInitialState(
         maxIterations=int(os.getenv("AGENT_MAX_ITERATIONS", "10")),
         status="running",
         errorMessage=None,
-        messages=[],
+        messages=messages or [],
         goal=goal,
         researchFindings=[],
         plan=None,

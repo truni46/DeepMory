@@ -135,12 +135,36 @@ async def backgroundTask():
 
 ---
 
+## Comment Rules
+
+- **No decorative separators** — do not use `# ----`, `# ====`, `# ****` or any visual divider lines.
+- **Keep comments minimal** — only comment when the code is not self-explanatory.
+- **Simple format only**: `# <content>` — one line, no borders, no padding.
+- **Docstrings** are preferred over comments for functions/classes.
+
+---
+
 ## Frontend Conventions
 
 - **Services** use class-based singletons: `export default new APIService()`.
 - **State management:** React Context for auth; layout-level state lifted via `useOutletContext()`.
 - **Routing:** React Router with `ChatLayout` as the layout wrapper for all protected routes.
 - **Responsive font sizing:** `html { font-size: clamp(13px, 1.061vw, 16px); }` — 14.5px baseline at 14" (1366px).
+
+### Component Organization
+
+```
+src/components/
+├── ui/                # Reusable UI primitives (AgentTaskList, Table, Card, Popup, Modal, Badge, ...)
+├── ChatInput.jsx      # Feature-specific components at root level
+├── ChatMessage.jsx
+├── Sidebar.jsx
+└── ...
+```
+
+- **All generic/reusable UI components** go in `components/ui/`: tables, cards, popups, modals, badges, tooltips, spinners, etc.
+- **Feature-specific components** (ChatInput, ChatMessage, Sidebar, ConversationList) stay at `components/` root.
+- Import UI components as: `import AgentTaskList from '../components/ui/AgentTaskList'`.
 
 ---
 
@@ -154,11 +178,10 @@ async def backgroundTask():
 
 ## Python Environment
 
-- **Always** use a virtual environment (`.venv`) for installing dependencies.
-- Before `pip install`, create and activate `.venv` if it doesn't exist:
+- **Always** use the root `.venv` (single venv for the whole project) for installing dependencies.
+- Before `pip install`, activate the root `.venv`:
   ```bash
-  cd server
-  python -m venv .venv
+  # From project root
   source .venv/bin/activate   # Linux/Mac
   .venv\Scripts\activate      # Windows
   pip install <package>

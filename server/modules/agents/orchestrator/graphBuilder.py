@@ -55,7 +55,7 @@ def _routeFromSupervisor(state: GraphState) -> str:
 
 
 def buildGraph():
-    """Build and compile the multi-agent StateGraph."""
+    """Build and compile the multi-agent StateGraph with checkpointer."""
     try:
         graph = StateGraph(GraphState)
 
@@ -84,13 +84,8 @@ def buildGraph():
         for agentName in ("research", "planner", "implement", "testing", "report"):
             graph.add_edge(agentName, "supervisor")
 
-        try:
-            compiled = graph.compile(checkpointer=taskMemory)
-            logger.info("Multi-agent graph compiled successfully")
-        except Exception as checkpointErr:
-            logger.warning(f"buildGraph: checkpointer unavailable, compiling without it: {checkpointErr}")
-            compiled = graph.compile()
-            logger.info("Multi-agent graph compiled without checkpointer")
+        compiled = graph.compile(checkpointer=taskMemory)
+        logger.info("Multi-agent graph compiled with RedisCheckpointer")
 
         return compiled
     except Exception as e:

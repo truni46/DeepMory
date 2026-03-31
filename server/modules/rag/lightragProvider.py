@@ -17,10 +17,6 @@ from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc
 
 
-# ---------------------------------------------------------------------------
-# LLM provider mapping — maps LLM_PROVIDER env to OpenAI-compatible base_url
-# ---------------------------------------------------------------------------
-
 _LLM_BASE_URLS = {
     "openai": "https://api.openai.com/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -46,11 +42,6 @@ def _getApiKey() -> str:
         return os.getenv("VLLM_API_KEY", "EMPTY")
     return os.getenv("OPENAI_API_KEY", "")
 
-
-# ---------------------------------------------------------------------------
-# LLM function for LightRAG
-# ---------------------------------------------------------------------------
-
 async def _llmFunc(
     prompt,
     system_prompt=None,
@@ -72,11 +63,6 @@ async def _llmFunc(
     except Exception as e:
         logger.error(f"LightRAG LLM call failed: {e}")
         raise
-
-
-# ---------------------------------------------------------------------------
-# Embedding function for LightRAG
-# ---------------------------------------------------------------------------
 
 def _buildEmbeddingFunc() -> EmbeddingFunc:
     embeddingProvider = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
@@ -119,9 +105,6 @@ def _buildEmbeddingFunc() -> EmbeddingFunc:
         )
 
 
-# ---------------------------------------------------------------------------
-# Provider class — manages per-namespace LightRAG instances
-# ---------------------------------------------------------------------------
 
 class LightRAGProvider:
     """

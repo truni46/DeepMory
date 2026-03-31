@@ -18,17 +18,20 @@ class BaseOpenAIProvider:
         self.client = AsyncOpenAI(api_key=APIKey, base_url=baseUrl)
         self.model = model
 
-    async def generateResponse(self, messages: List[Dict], stream: bool = False):
+    async def generateResponse(self, messages: List[Dict], stream: bool = False, tools: Optional[List[Dict]] = None):
         try:
             if stream:
                 return self.streamResponse(messages)
             else:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=0.7
-                )
-                return response.choices[0].message.content
+                kwargs = {"model": self.model, "messages": messages, "temperature": 0.7}
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = "auto"
+                response = await self.client.chat.completions.create(**kwargs)
+                msg = response.choices[0].message
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    return msg
+                return msg.content
         except Exception as e:
             logger.error(f"LLM Provider ({self.model}) error: {e}")
             raise e
@@ -49,7 +52,7 @@ class BaseOpenAIProvider:
                         step = 4
                         for i in range(0, len(content), step):
                             yield content[i:i+step]
-                            await asyncio.sleep(0.02)
+                            await asyncio.sleep(0.01)
         except Exception as e:
             logger.error(f"LLM Streaming error ({self.model}): {e}")
             raise e
@@ -60,7 +63,7 @@ class BaseOpenAIProvider:
 
 class OllamaProvider(BaseOpenAIProvider):
     def __init__(self, baseUrl: str = None, model: str = None):
-        baseUrl = baseUrl or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        baseUrl = baseUrl or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         model = model or os.getenv("LLM_MODEL", "kamekichi128/qwen3-4b-instruct-2507") 
         super().__init__(APIKey="ollama", baseUrl=baseUrl, model=model)
 
@@ -210,9 +213,9 @@ class LLMInferenceService:
     def model(self) -> str:
         return self.provider.modelName
 
-    async def generateResponse(self, messages: List[Dict], stream: bool = False):
+    async def generateResponse(self, messages: List[Dict], stream: bool = False, tools: Optional[List[Dict]] = None):
         """Generate response from LLM"""
-        return await self.provider.generateResponse(messages, stream)
+        return await self.provider.generateResponse(messages, stream, tools)
         
     async def streamResponse(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
         streamGen = await self.generateResponse(messages, stream=True)

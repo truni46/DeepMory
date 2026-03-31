@@ -12,8 +12,6 @@ from modules.memory.longTerm.memRAG import memRAG
 
 class MemoryFacade:
 
-    # ---- Short-term (Conv) ---------------------------------------------------
-
     async def addTurn(self, conversationId: str, role: str, content: str) -> None:
         """Append one message turn to the conversation context window."""
         await convRAG.addTurn(conversationId, role, content)
@@ -28,8 +26,6 @@ class MemoryFacade:
     async def clearConversation(self, conversationId: str) -> None:
         """Wipe both Redis window and summary for a conversation."""
         await convRAG.clearConversation(conversationId)
-
-    # ---- Long-term (Mem) ----------------------------------------------------
 
     async def retrieveRelevantMemories(
         self,

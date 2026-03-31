@@ -44,6 +44,24 @@
     @apply bg-primary bg-opacity-30 rounded-full hover:bg-opacity-50 transition-colors;
   } */
 
+  .dropdown-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .dropdown-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dropdown-scroll::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 9999px;
+  }
+  .dropdown-scroll::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+  .dropdown-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+  }
+
   /* Button styles - light theme with green accents */
   .btn-primary {
     @apply bg-primary hover:bg-primary-dark text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200 shadow-sm;

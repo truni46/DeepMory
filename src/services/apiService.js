@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
  * API Service for making HTTP requests
@@ -29,8 +29,8 @@ class APIService {
             const response = await fetch(url, config);
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: 'Request failed' }));
-                throw new Error(error.error || `HTTP ${response.status}`);
+                const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                throw new Error(error.detail || error.error || error.message || `HTTP ${response.status}`);
             }
 
             // Handle different response types

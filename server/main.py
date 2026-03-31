@@ -24,7 +24,7 @@ from websocket.handlers import sio
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
     # Startup
-    logger.info("Starting AI Tutor Server...")
+    logger.info("Starting DeepMory Server...")
     
     # Connect to database
     await db.connect()
@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="AI Tutor API",
+    title="DeepMory API",
     description="chatbot backend with SSE streaming and WebSocket support",
     version="1.0.0",
     lifespan=lifespan
@@ -67,23 +67,23 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(apiRouter)
+app.include_router(apiRouter, prefix="/api/v1")
 
 # Root endpoint
 @app.get("/")
 async def root():
     """Root endpoint with API information"""
     return {
-        "message": "AI Tutor API",
+        "message": "DeepMory API",
         "version": "1.0.0",
         "framework": "FastAPI",
         "endpoints": {
-            "health": "/api/health",
-            "dbStatus": "/api/db-status",
-            "conversations": "/api/conversations",
-            "messages": "/api/messages",
-            "chat": "/api/messages/chat/completions",
-            "settings": "/api/settings"
+            "health": "/v1/health",
+            "dbStatus": "/v1/db-status",
+            "conversations": "/v1/conversations",
+            "messages": "/v1/messages",
+            "chat": "/v1/messages/chat/completions",
+            "settings": "/v1/settings"
         },
         "websocket": "/socket.io",
         "documentation": {

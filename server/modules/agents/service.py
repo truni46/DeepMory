@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 from config.logger import logger
 from modules.agents.orchestrator.graphBuilder import agentGraph
 from modules.agents.orchestrator.taskState import buildInitialState
 from modules.agents.repository import agentRepository
+from modules.message.repository import messageRepository
 
 _COMMAND_MAP = {
     "/research": "research",
@@ -17,6 +20,8 @@ _COMMAND_MAP = {
     "/run": "run",
     "/browser": "browser",
 }
+
+_CHAT_HISTORY_LIMIT = 30
 
 
 class AgentFacade:
@@ -114,6 +119,27 @@ class AgentFacade:
         except Exception as e:
             logger.error(f"AgentFacade.streamTask failed taskId={taskId}: {e}")
 
+    async def _loadChatHistory(self, conversationId: str, limit: int = _CHAT_HISTORY_LIMIT) -> List:
+        """Load conversation chat history and convert to LangChain messages."""
+        try:
+            if not conversationId:
+                return []
+            rows = await messageRepository.getByConversation(conversationId, limit=limit)
+            messages = []
+            for row in rows:
+                role = row.get("role", "")
+                content = row.get("content", "")
+                if not content:
+                    continue
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content))
+            return messages
+        except Exception as e:
+            logger.error(f"AgentFacade._loadChatHistory failed conversationId={conversationId}: {e}")
+            return []
+
     async def _runGraph(
         self,
         taskId: str,
@@ -125,20 +151,36 @@ class AgentFacade:
         """Background task: runs the LangGraph graph and persists results."""
         startTime = time.time()
         try:
-            initialState = buildInitialState(taskId, userId, goal, conversationId, projectId)
-            config = {"configurable": {"thread_id": taskId}}
+            chatHistory = await self._loadChatHistory(conversationId)
+            initialState = buildInitialState(
+                taskId, userId, goal, conversationId, projectId,
+                messages=chatHistory,
+            )
+
+            threadId = conversationId or taskId
+            config = {"configurable": {"thread_id": threadId}}
+
+            _SKIP_NODES = {"supervisor", "__start__", "__end__"}
+
             finalState = None
             async for state in agentGraph.astream(initialState, config=config):
                 finalState = state
                 nodeKey = list(state.keys())[0] if state else None
-                if nodeKey:
+                if nodeKey and nodeKey not in _SKIP_NODES:
                     nodeState = state[nodeKey]
                     durationMs = int((time.time() - startTime) * 1000)
+                    outputData = {}
+                    if isinstance(nodeState, dict):
+                        messagesInfo = nodeState.get("messages", [])
+                        outputData["content"] = str(messagesInfo[-1].content) if messagesInfo else ""
+                        if nodeKey == "planner" and "plan" in nodeState:
+                            outputData["plan"] = nodeState.get("plan")
+
                     await agentRepository.createRun(
                         taskId=taskId,
                         agentType=nodeKey,
                         iterationNum=nodeState.get("iterationCount", 0) if isinstance(nodeState, dict) else 0,
-                        outputData={"content": str(nodeState.get("messages", [])[-1].content if isinstance(nodeState, dict) and nodeState.get("messages") else "")} if isinstance(nodeState, dict) else {},
+                        outputData=outputData,
                         status="completed",
                         durationMs=durationMs,
                     )

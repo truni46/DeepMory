@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-import json
+import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
 
 from config.logger import logger
 from modules.agents.deepMoryLLM import deepMoryLLM
 from modules.agents.memory.agentMemory import agentMemory
-from modules.agents.orchestrator.taskState import TaskState
+from modules.agents.subAgents.agentUtils import extractConversationContext
+from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import PLANNER_TOOLS
 
+_reactAgent = create_agent(deepMoryLLM, PLANNER_TOOLS)
 
-async def plannerNode(state: TaskState) -> dict:
-    """Planner Agent: converts research findings into a structured execution plan."""
+
+async def plannerNode(state: dict) -> dict:
+    """Planner Agent: dynamically generates planning tasks, then executes each."""
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
@@ -25,27 +29,64 @@ async def plannerNode(state: TaskState) -> dict:
             f"- {f.get('content', '')}" for f in findings
         ) or "No research findings available."
 
-        messages = [
-            SystemMessage(content=(
-                "You are a Planner Agent. Create a detailed, actionable plan to achieve the goal "
-                "based on the research findings. Break the work into clear sequential steps. "
-                "Use createPlan tool to produce a structured plan.\n\n"
-                f"Successful planning patterns from past tasks:\n{proceduralText}"
-            )),
-            HumanMessage(content=(
-                f"Goal: {goal}\n\nResearch findings:\n{findingsText}\n\n"
-                "Create a detailed plan using the createPlan tool."
-            )),
-        ] + list(state.get("messages", []))
+        conversationMessages = extractConversationContext(state.get("messages", []))
 
-        llm = deepMoryLLM.bind_tools(PLANNER_TOOLS)
-        response = await llm.ainvoke(messages)
+        tasks = await taskRunner.generateTasks("planner", goal, conversationMessages)
+        await taskRunner.reportTasksGenerated(taskId, "planner", tasks)
 
-        plan = {"goal": goal, "steps": [], "rawResponse": response.content}
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            for tc in response.tool_calls:
-                if tc.get("name") == "createPlan":
-                    plan = tc.get("args", plan)
+        plan = {"goal": goal, "steps": []}
+        allNewMessages = []
+
+        for i, task in enumerate(tasks):
+            await taskRunner.reportTaskStarted(taskId, "planner", i)
+            startTime = time.time()
+
+            inputMessages = [
+                SystemMessage(content=(
+                    "You are a Planner Agent. Create a detailed, actionable plan. "
+                    "Use createPlan tool to produce a structured plan.\n\n"
+                    f"Successful planning patterns:\n{proceduralText}"
+                )),
+                *conversationMessages,
+                HumanMessage(content=(
+                    f"Goal: {goal}\n\nResearch findings:\n{findingsText}\n\n"
+                    f"Planning task: {task['description']}"
+                )),
+            ]
+
+            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            newMsgs = result["messages"][len(inputMessages):]
+            allNewMessages.extend(newMsgs)
+
+            for msg in newMsgs:
+                if getattr(msg, "type", None) == "ai" and hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        if tc.get("name") == "createPlan":
+                            args = tc.get("args", {})
+                            steps = args.get("steps", [])
+                            plan = {
+                                "goal": args.get("goal", goal),
+                                "steps": [
+                                    {"index": j + 1, "description": s, "status": "pending"}
+                                    for j, s in enumerate(steps)
+                                ],
+                                "notes": args.get("notes", ""),
+                            }
+
+            taskResult = ""
+            for msg in reversed(newMsgs):
+                if getattr(msg, "type", None) == "ai" and msg.content:
+                    taskResult = msg.content
+                    break
+
+            durationMs = int((time.time() - startTime) * 1000)
+            await taskRunner.reportTaskCompleted(taskId, "planner", i, taskResult, durationMs)
+
+        if not plan.get("steps") and allNewMessages:
+            for msg in reversed(allNewMessages):
+                if getattr(msg, "type", None) == "ai" and msg.content:
+                    plan["rawResponse"] = msg.content
+                    break
 
         await agentMemory.writeProcedural(
             agentType="planner", userId=userId, taskId=taskId,
@@ -53,8 +94,7 @@ async def plannerNode(state: TaskState) -> dict:
             metadata={"goal": goal},
         )
 
-        newMessages = list(state.get("messages", [])) + [response]
-        return {"plan": plan, "currentAgent": "planner", "messages": newMessages}
+        return {"plan": plan, "currentAgent": "planner", "messages": allNewMessages}
     except Exception as e:
         logger.error(f"plannerNode failed taskId={taskId}: {e}")
         return {"errorMessage": str(e), "status": "failed"}

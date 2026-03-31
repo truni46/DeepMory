@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import time
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
 
 from config.logger import logger
 from modules.agents.deepMoryLLM import deepMoryLLM
 from modules.agents.memory.agentMemory import agentMemory
-from modules.agents.orchestrator.taskState import TaskState
+from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
+from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import TESTING_TOOLS
 
+_reactAgent = create_agent(deepMoryLLM, TESTING_TOOLS)
 
-async def testingNode(state: TaskState) -> dict:
-    """Testing Agent: validates implementation, runs tests, generates and runs test cases."""
+
+async def testingNode(state: dict) -> dict:
+    """Testing Agent: dynamically generates test tasks, then executes each."""
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
@@ -19,27 +25,52 @@ async def testingNode(state: TaskState) -> dict:
         episodic = await agentMemory.recallEpisodic("testing", userId, limit=3)
         episodicText = "\n".join(f"- {m.get('content', '')}" for m in episodic) or "None"
 
-        messages = [
-            SystemMessage(content=(
-                "You are a Testing Agent. Validate the implementation against the goal. "
-                "Use testCaseGenerator to create tests, testRunner to run them, "
-                "validator to check outputs, and invokeBrowserAgent for UI/web testing.\n\n"
-                f"Common failure patterns to watch for:\n{episodicText}"
-            )),
-            HumanMessage(content=(
-                f"Goal: {goal}\n\nImplementation result:\n{implementation.get('output', 'No output')}\n\n"
-                "Run tests and validate the implementation."
-            )),
-        ] + list(state.get("messages", []))
+        conversationMessages = extractConversationContext(state.get("messages", []))
 
-        llm = deepMoryLLM.bind_tools(TESTING_TOOLS)
-        response = await llm.ainvoke(messages)
+        tasks = await taskRunner.generateTasks(
+            "testing", f"{goal}\n\nImplementation output:\n{implementation.get('output', 'N/A')[:300]}",
+            conversationMessages,
+        )
+        await taskRunner.reportTasksGenerated(taskId, "testing", tasks)
 
-        passed = "fail" not in response.content.lower() and "error" not in response.content.lower()
+        allNewMessages = []
+        allResults = []
+
+        for i, task in enumerate(tasks):
+            await taskRunner.reportTaskStarted(taskId, "testing", i)
+            startTime = time.time()
+
+            inputMessages = [
+                SystemMessage(content=(
+                    "You are a Testing Agent. Validate the implementation against the goal. "
+                    "Use testCaseGenerator to create tests, testRunner to run them, "
+                    "validator to check outputs.\n\n"
+                    f"Common failure patterns:\n{episodicText}"
+                )),
+                *conversationMessages,
+                HumanMessage(content=(
+                    f"Goal: {goal}\nImplementation: {implementation.get('output', 'No output')[:200]}\n\n"
+                    f"Testing task: {task['description']}"
+                )),
+            ]
+
+            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            newMsgs = result["messages"][len(inputMessages):]
+            allNewMessages.extend(newMsgs)
+
+            taskResult = extractLastAIContent(newMsgs)
+            allResults.append(taskResult)
+
+            durationMs = int((time.time() - startTime) * 1000)
+            await taskRunner.reportTaskCompleted(taskId, "testing", i, taskResult, durationMs)
+
+        combinedOutput = "\n".join(allResults)
+        passed = "fail" not in combinedOutput.lower() and "error" not in combinedOutput.lower()
+
         testingResult = {
-            "output": response.content,
+            "output": combinedOutput,
             "passed": passed,
-            "toolCalls": [tc.get("name") for tc in (response.tool_calls if hasattr(response, "tool_calls") and response.tool_calls else [])],
+            "taskCount": len(tasks),
         }
 
         await agentMemory.writeEpisodic(
@@ -48,8 +79,7 @@ async def testingNode(state: TaskState) -> dict:
             metadata={"passed": passed, "goal": goal},
         )
 
-        newMessages = list(state.get("messages", [])) + [response]
-        return {"testingResult": testingResult, "currentAgent": "testing", "messages": newMessages}
+        return {"testingResult": testingResult, "currentAgent": "testing", "messages": allNewMessages}
     except Exception as e:
         logger.error(f"testingNode failed taskId={taskId}: {e}")
         return {"errorMessage": str(e), "status": "failed"}

@@ -43,13 +43,11 @@ class MessageService:
         4. Save assistant response
         5. Background: update short-term window + extract long-term memories
         """
-        # 1. Save user message
         userMsg = await messageRepository.create(conversationId, "user", content)
 
-        # 2a. Short-term context window (replaces naive getHistoryForContext)
+        logger.info("[Step 3] Building context (Conversation History, RAG, Memory)")
         contextWindow = await memoryFacade.getContextWindow(conversationId)
 
-        # 2b. RAG context (project knowledge base)
         ragContext = ""
         if projectId:
             try:
@@ -58,20 +56,18 @@ class MessageService:
             except Exception as e:
                 logger.warning(f"RAG search failed for project {projectId}: {e}")
 
-        # 2c. Long-term memories (vector recall)
         memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
 
-        # Build system prompt
         systemPrompt = "You are a helpful AI assistant."
         if ragContext:
             systemPrompt += f"\n\nRelevant Context:\n{ragContext}"
         if memoryText:
             systemPrompt += f"\n\nKnown about this user:\n{memoryText}"
 
-        messages = [{"role": "system", "content": systemPrompt}] + contextWindow
+        messages = [{"role": "system", "content": systemPrompt}] + contextWindow + [{"role": "user", "content": content}]
+        logger.info(f"[Step 4] Starting streaming response (Model: {llmProvider.model})")
 
-        # 3. Stream LLM response
         fullResponse = ""
         try:
             async for chunk in llmProvider._stream_response(messages):
@@ -86,23 +82,20 @@ class MessageService:
             else:
                 fullResponse += f"\n\n[{errorMsg}]"
                 yield f"\n\n[{errorMsg}]"
-
-        # 4. Save assistant response
+                
+        logger.info("[Step 5] Stream complete. Executing background tasks (Persistence & Summary)")
         await messageRepository.create(
             conversationId, "assistant", fullResponse,
             model=llmProvider.model, parentId=userMsg["id"],
         )
 
-        # 5. Background: update context window
         asyncio.create_task(memoryFacade.addTurn(conversationId, "user", content))
         asyncio.create_task(memoryFacade.addTurn(conversationId, "assistant", fullResponse))
 
-        # 5b. Background: extract long-term memories
         asyncio.create_task(
             memoryFacade.processConversationTurn(userId, conversationId, content, fullResponse)
         )
 
-        # 5c. Background: generate title for new conversations
         if len(contextWindow) <= 1:
             asyncio.create_task(
                 self.generateConversationTitle(conversationId, userId, content, fullResponse)

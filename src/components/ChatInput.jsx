@@ -1,39 +1,151 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import DropdownMenu from './ui/DropdownMenu';
+
+const SLASH_COMMANDS = [
+    { id: '/research', label: '/research', description: 'Search and gather information', command: '/research' },
+    { id: '/plan', label: '/plan', description: 'Create an execution plan', command: '/plan' },
+    { id: '/implement', label: '/implement', description: 'Write code or documents', command: '/implement' },
+    { id: '/report', label: '/report', description: 'Generate a summary report', command: '/report' },
+    { id: '/run', label: '/run', description: 'Execute the full agent pipeline', command: '/run' },
+    { id: '/browser', label: '/browser', description: 'Automate browser actions', command: '/browser' },
+];
+
+function getSlashCommand(text) {
+    const match = text.match(/^(\/\w+)/);
+    if (!match) return null;
+    return SLASH_COMMANDS.find(c => c.command === match[1]) ? match[1] : null;
+}
 
 export default function ChatInput({ onSend, disabled = false }) {
     const [message, setMessage] = useState('');
-    const textareaRef = useRef(null);
+    const [showCommands, setShowCommands] = useState(false);
+    const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const editorRef = useRef(null);
+    const isComposing = useRef(false);
+
+    useEffect(() => {
+        if (message.startsWith('/')) {
+            const query = message.slice(1).toLowerCase().split(' ')[0];
+            const hasSpace = message.includes(' ');
+            const exactMatch = SLASH_COMMANDS.some(c => c.command === '/' + query);
+            if (hasSpace && exactMatch) {
+                setShowCommands(false);
+                return;
+            }
+            const filtered = SLASH_COMMANDS.filter(c =>
+                c.command.slice(1).startsWith(query) || c.label.toLowerCase().startsWith(query)
+            );
+            setFilteredCommands(filtered);
+            setShowCommands(filtered.length > 0);
+            setSelectedIndex(0);
+        } else {
+            setShowCommands(false);
+        }
+    }, [message]);
+
+    const renderHighlighted = useCallback(() => {
+        const el = editorRef.current;
+        if (!el) return;
+
+        const cmd = getSlashCommand(message);
+        if (cmd) {
+            const rest = message.slice(cmd.length);
+            const html = `<span class="slash-cmd" style="color:#007E6E;font-weight:600;">${cmd}</span>${escapeHtml(rest)}`;
+            if (el.innerHTML !== html) {
+                const sel = window.getSelection();
+                const offset = getCaretOffset(el);
+                el.innerHTML = html;
+                restoreCaret(el, offset);
+            }
+        } else {
+            const text = el.textContent || '';
+            if (text !== message) {
+                const offset = getCaretOffset(el);
+                el.textContent = message;
+                restoreCaret(el, offset);
+            }
+        }
+    }, [message]);
+
+    useEffect(() => {
+        renderHighlighted();
+    }, [message, renderHighlighted]);
+
+    const selectCommand = (cmd) => {
+        const newMsg = cmd.command + ' ';
+        setMessage(newMsg);
+        setShowCommands(false);
+        requestAnimationFrame(() => {
+            const el = editorRef.current;
+            if (!el) return;
+            el.focus();
+            const totalLen = newMsg.length;
+            restoreCaret(el, totalLen);
+        });
+    };
 
     const handleSend = () => {
         if (message.trim() && !disabled) {
             onSend(message.trim());
             setMessage('');
-            if (textareaRef.current) {
-                textareaRef.current.style.height = 'auto';
+            if (editorRef.current) {
+                editorRef.current.textContent = '';
             }
+            setShowCommands(false);
         }
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+    const handleKeyDown = (e) => {
+        if (isComposing.current) return;
+
+        if (showCommands) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev + 1) % filteredCommands.length);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+                return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                selectCommand(filteredCommands[selectedIndex]);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowCommands(false);
+                return;
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                selectCommand(filteredCommands[selectedIndex]);
+                return;
+            }
+        } else if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }
     };
 
-    const handleInput = (e) => {
-        setMessage(e.target.value);
+    const handleInput = () => {
+        const text = editorRef.current?.textContent || '';
+        setMessage(text);
+    };
 
-        // Auto-resize textarea
-        e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+    const handlePaste = (e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
     };
 
     return (
         <div className="bg-transparent p-4">
             <div className="max-w-3xl mx-auto">
                 <div className="relative flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
-                    {/* Attach Button */}
                     <button
                         className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
                         title="Add documents"
@@ -43,20 +155,31 @@ export default function ChatInput({ onSend, disabled = false }) {
                         </svg>
                     </button>
 
-                    {/* Textarea */}
-                    <textarea
-                        ref={textareaRef}
-                        value={message}
-                        onChange={handleInput}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Ask a question..."
-                        disabled={disabled}
-                        className="flex-1 bg-transparent text-sm md:text-[14.5px] text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2 ml-1"
-                        rows={1}
-                        style={{ minHeight: '24px' }}
-                    />
+                    <div className="flex-1 relative">
+                        <DropdownMenu
+                            items={filteredCommands}
+                            selectedIndex={selectedIndex}
+                            visible={showCommands}
+                            position="top"
+                            onSelect={(item) => selectCommand(item)}
+                            onHover={(index) => setSelectedIndex(index)}
+                        />
 
-                    {/* Send/Microphone Button */}
+                        <div
+                            ref={editorRef}
+                            contentEditable={!disabled}
+                            onInput={handleInput}
+                            onKeyDown={handleKeyDown}
+                            onPaste={handlePaste}
+                            onCompositionStart={() => { isComposing.current = true; }}
+                            onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
+                            data-placeholder="Ask a question..."
+                            className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto py-2 ml-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                            role="textbox"
+                            style={{ minHeight: '24px' }}
+                        />
+                    </div>
+
                     <button
                         onClick={handleSend}
                         disabled={!message.trim() || disabled}
@@ -78,11 +201,46 @@ export default function ChatInput({ onSend, disabled = false }) {
                     </button>
                 </div>
 
-                {/* Footer text */}
                 <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
-                    AI-Tutor can make mistakes, please check the response.
+                    DeepMory can make mistakes, please check the response.
                 </div>
             </div>
         </div>
     );
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function getCaretOffset(el) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return 0;
+    const range = sel.getRangeAt(0).cloneRange();
+    range.selectNodeContents(el);
+    range.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+    return range.toString().length;
+}
+
+function restoreCaret(el, offset) {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    let current = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+        const len = node.textContent.length;
+        if (current + len >= offset) {
+            range.setStart(node, offset - current);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return;
+        }
+        current += len;
+    }
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
 }

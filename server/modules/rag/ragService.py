@@ -15,11 +15,6 @@ from lightrag import QueryParam
 from modules.rag.lightragProvider import lightragProvider
 from modules.rag.repository import Document, SearchResult
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _readFile(filePath: str) -> str:
     """Read file content as text. Supports TXT, MD, HTML directly. PDF/DOCX via extractors."""
     ext = os.path.splitext(filePath)[1].lower()
@@ -60,15 +55,8 @@ def _toSearchResults(lightragResponse: str) -> List[SearchResult]:
     ]
 
 
-# ---------------------------------------------------------------------------
-# RagService
-# ---------------------------------------------------------------------------
-
 class RagService:
 
-    # ------------------------------------------------------------------
-    # Called by knowledge/service.py
-    # ------------------------------------------------------------------
 
     async def index(
         self,
@@ -110,10 +98,6 @@ class RagService:
             logger.error(f"LightRAG delete failed for document {documentId}: {e}")
             raise
 
-    # ------------------------------------------------------------------
-    # Called by message/service.py (RAG context for chat)
-    # ------------------------------------------------------------------
-
     async def searchContext(
         self,
         query: str,
@@ -137,10 +121,6 @@ class RagService:
         except Exception as e:
             logger.warning(f"LightRAG search failed for project {projectId}: {e}")
             return []
-
-    # ------------------------------------------------------------------
-    # Called by memory/longTerm/memRAG.py
-    # ------------------------------------------------------------------
 
     async def upsertMemoryVector(
         self,

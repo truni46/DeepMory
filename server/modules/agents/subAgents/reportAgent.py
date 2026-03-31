@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import time
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
 
 from config.logger import logger
 from modules.agents.deepMoryLLM import deepMoryLLM
 from modules.agents.memory.agentMemory import agentMemory
-from modules.agents.orchestrator.taskState import TaskState
+from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
+from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import REPORT_TOOLS
 
+_reactAgent = create_agent(deepMoryLLM, REPORT_TOOLS)
 
-async def reportNode(state: TaskState) -> dict:
-    """Report Agent: synthesizes the full task into a final report."""
+
+async def reportNode(state: dict) -> dict:
+    """Report Agent: dynamically generates report tasks, then executes each."""
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
@@ -23,25 +29,54 @@ async def reportNode(state: TaskState) -> dict:
 
         status = "completed" if testingResult.get("passed") else "partial_failure"
 
-        messages = [
-            SystemMessage(content=(
-                "You are a Report Agent. Create a comprehensive final report summarizing "
-                "what was accomplished, how it was done, and the outcomes. "
-                "Use reportWriter to produce a structured markdown report.\n\n"
-                f"Report format preferences:\n{proceduralText}"
-            )),
-            HumanMessage(content=(
-                f"Goal: {goal}\n"
-                f"Plan: {plan.get('goal', goal)}\n"
-                f"Implementation: {implementationResult.get('output', 'N/A')[:300]}\n"
-                f"Testing: {'PASSED' if testingResult.get('passed') else 'FAILED'}\n"
-                f"Status: {status}\n\n"
-                "Write the final report."
-            )),
-        ] + list(state.get("messages", []))
+        conversationMessages = extractConversationContext(state.get("messages", []))
 
-        llm = deepMoryLLM.bind_tools(REPORT_TOOLS)
-        response = await llm.ainvoke(messages)
+        tasks = await taskRunner.generateTasks(
+            "report",
+            f"{goal}\nStatus: {status}\nTesting: {'passed' if testingResult.get('passed') else 'failed'}",
+            conversationMessages,
+        )
+        await taskRunner.reportTasksGenerated(taskId, "report", tasks)
+
+        allNewMessages = []
+        finalContent = ""
+
+        for i, task in enumerate(tasks):
+            await taskRunner.reportTaskStarted(taskId, "report", i)
+            startTime = time.time()
+
+            inputMessages = [
+                SystemMessage(content=(
+                    "You are a Report Agent. Create a comprehensive report. "
+                    "Use reportWriter to produce a structured markdown report.\n\n"
+                    f"Report format preferences:\n{proceduralText}"
+                )),
+                *conversationMessages,
+                HumanMessage(content=(
+                    f"Goal: {goal}\n"
+                    f"Plan: {plan.get('goal', goal)}\n"
+                    f"Implementation: {implementationResult.get('output', 'N/A')[:300]}\n"
+                    f"Testing: {'PASSED' if testingResult.get('passed') else 'FAILED'}\n\n"
+                    f"Report task: {task['description']}"
+                )),
+            ]
+
+            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            newMsgs = result["messages"][len(inputMessages):]
+            allNewMessages.extend(newMsgs)
+
+            taskResult = extractLastAIContent(newMsgs)
+            if taskResult:
+                finalContent = taskResult
+
+            if not finalContent:
+                for msg in newMsgs:
+                    if getattr(msg, "type", None) == "tool" and msg.content:
+                        finalContent = msg.content
+                        break
+
+            durationMs = int((time.time() - startTime) * 1000)
+            await taskRunner.reportTaskCompleted(taskId, "report", i, taskResult, durationMs)
 
         await agentMemory.writeProcedural(
             agentType="report", userId=userId, taskId=taskId,
@@ -49,12 +84,11 @@ async def reportNode(state: TaskState) -> dict:
             metadata={"goal": goal, "status": status},
         )
 
-        newMessages = list(state.get("messages", [])) + [response]
         return {
-            "finalReport": response.content,
+            "finalReport": finalContent,
             "status": status,
             "currentAgent": "report",
-            "messages": newMessages,
+            "messages": allNewMessages,
         }
     except Exception as e:
         logger.error(f"reportNode failed taskId={taskId}: {e}")

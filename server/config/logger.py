@@ -56,7 +56,7 @@ def setup_logger():
     """Configure and return the main logger"""
     
     # Create logger
-    logger = logging.getLogger('ai_tutor')
+    logger = logging.getLogger('deepmory')
     logger.setLevel(logging.DEBUG)
     
     # Prevent duplicate logs

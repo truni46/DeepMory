@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
  * Server-Sent Events (SSE) Streaming Service
@@ -16,7 +16,7 @@ class StreamingService {
      * @param {Function} onComplete Callback when complete
      * @param {Function} onError Callback on error
      */
-    async sendMessage(message, conversationId, onChunk, onComplete, onError) {
+    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask) {
         try {
             const token = localStorage.getItem('accessToken');
             const headers = {
@@ -55,6 +55,11 @@ class StreamingService {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
+
+                            if (data.agentTask && onAgentTask) {
+                                onAgentTask(data.taskId);
+                                return;
+                            }
 
                             if (data.error) {
                                 onError(new Error(data.error));

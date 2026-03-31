@@ -11,9 +11,9 @@ services:
       - FRONTEND_URL=http://localhost:80
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=ai_tutor_db
-      - DB_USER=ai_tutor
-      - DB_PASSWORD=ai_tutor_pass
+      - DB_NAME=deepmory_db
+      - DB_USER=deepmory
+      - DB_PASSWORD=deepmory_pass
       - REDIS_HOST=redis
       - USE_DATABASE=true
       # LLM config (using ollama on host via host.docker.internal if needed, or default)
@@ -23,7 +23,7 @@ services:
       # Neo4j
       - NEO4J_URL=bolt://neo4j:7687
       - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=ai_tutor_pass
+      - NEO4J_PASSWORD=deepmory_pass
       # LightRAG
       - LIGHTRAG_QUERY_MODE=hybrid
     depends_on:
@@ -40,7 +40,7 @@ services:
     build:
       context: .
       args:
-        - VITE_API_URL=http://localhost:3000/api
+        - VITE_API_URL=http://localhost:3000/api/v1
         - VITE_SOCKET_URL=http://localhost:3000
     ports:
       - "80:80"
@@ -52,9 +52,9 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=ai_tutor
-      - POSTGRES_PASSWORD=ai_tutor_pass
-      - POSTGRES_DB=ai_tutor_db
+      - POSTGRES_USER=deepmory
+      - POSTGRES_PASSWORD=deepmory_pass
+      - POSTGRES_DB=deepmory_db
     ports:
       - "5432:5432"
     networks:
@@ -62,7 +62,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai_tutor -d ai_tutor_db"]
+      test: ["CMD-SHELL", "pg_isready -U deepmory -d deepmory_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -91,7 +91,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=neo4j/ai_tutor_pass
+      - NEO4J_AUTH=neo4j/deepmory_pass
       - NEO4J_PLUGINS=["apoc"]
     volumes:
       - neo4j_data:/data
