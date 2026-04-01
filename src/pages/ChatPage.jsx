@@ -11,13 +11,13 @@ import agentStreamService from '../services/agentStreamService';
 import websocketService from '../services/websocketService';
 import logger from '../utils/logger';
 
-const AGENT_STEPS = [
-    { id: 'research',  label: 'Researching' },
-    { id: 'planner',   label: 'Planning' },
-    { id: 'implement', label: 'Implementing' },
-    { id: 'testing',   label: 'Testing' },
-    { id: 'report',    label: 'Generating report' },
-];
+const AGENT_NAME_MAP = {
+    research: 'Research Agent',
+    planner: 'Planning Agent',
+    implement: 'Implementation Agent',
+    testing: 'Testing Agent',
+    report: 'Reporting Agent',
+};
 
 export default function ChatPage() {
     const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
@@ -65,39 +65,6 @@ export default function ChatPage() {
         }
     }, [activeConversationId]);
 
-    useEffect(() => {
-        if (!agentGroups || agentGroups.length === 0) return;
-
-        let hasChanges = false;
-        const newGroups = agentGroups.map(group => {
-            const steps = [...group.steps];
-            const procIdx = steps.findIndex(s => s.status === 'processing');
-            
-            if (procIdx !== -1) {
-                hasChanges = true;
-                steps[procIdx] = { ...steps[procIdx], status: 'completed' };
-                const nextPendIdx = steps.findIndex(s => s.status === 'pending');
-                if (nextPendIdx !== -1) {
-                    steps[nextPendIdx] = { ...steps[nextPendIdx], status: 'processing' };
-                }
-            } else {
-                const pendIdx = steps.findIndex(s => s.status === 'pending');
-                if (pendIdx !== -1) {
-                    hasChanges = true;
-                    steps[pendIdx] = { ...steps[pendIdx], status: 'processing' };
-                }
-            }
-            
-            return { ...group, steps };
-        });
-
-        if (hasChanges) {
-            const timer = setTimeout(() => {
-                setAgentGroups(newGroups);
-            }, 600);
-            return () => clearTimeout(timer);
-        }
-    }, [agentGroups]);
 
     const loadMessages = async (conversationId) => {
         try {
@@ -154,62 +121,67 @@ export default function ChatPage() {
     const handleAgentTask = async (taskId, conversationId) => {
         setAgentGroups([]);
 
+        const findGroupByAgent = (groups, agentType) => {
+            for (let i = groups.length - 1; i >= 0; i--) {
+                if (groups[i].agentType === agentType) return i;
+            }
+            return -1;
+        };
+
         try {
             await agentStreamService.streamTask(
                 taskId,
                 (event) => {
-                    const skipNodes = ['supervisor', '__start__', '__end__'];
-                    if (skipNodes.includes(event.agentType)) return;
+                    const output = event.output || {};
+                    const agentType = event.agentType;
 
-                    setAgentGroups(prev => {
-                        let groups = prev ? [...prev] : [];
+                    if (output.event === 'tasks_generated') {
+                        const tasks = (output.tasks || []).map((t, idx) => ({
+                            id: `task_${idx}`,
+                            label: t.description || `Task ${idx + 1}`,
+                            status: 'pending',
+                        }));
+                        const agentName = AGENT_NAME_MAP[agentType] || agentType;
 
-                        let tasks = [];
-                        if (event.output?.plan?.steps) {
-                            tasks = event.output.plan.steps.map((st, idx) => ({
-                                id: `step_${idx}`,
-                                label: typeof st.description === 'string' ? st.description : (st.name || 'Task step'),
-                                status: 'pending'
-                            }));
-                        } else {
-                            const content = typeof event.output?.content === 'string' ? event.output.content : '';
-                            const bullets = content.split('\n').filter(line => line.trim().startsWith('- '));
-                            if (bullets.length > 0) {
-                                tasks = bullets.slice(0, 5).map((b, idx) => ({
-                                    id: `step_${idx}`,
-                                    label: b.replace('- ', '').replace('*', '').trim().substring(0, 80),
-                                    status: 'pending'
-                                }));
-                            } else {
-                                tasks = [{ id: '1', label: `Executed task in background`, status: 'completed' }, 
-                                         { id: '2', label: `Executed task in background`, status: 'pending' }, 
-                                         { id: '3', label: `Executed task in background`, status: 'pending' }];
-                            }
-                        }
-
-                        const agentNameMap = {
-                            research: 'Research Agent',
-                            planner: 'Planning Agent',
-                            implement: 'Implementation Agent',
-                            testing: 'Testing Agent',
-                            report: 'Reporting Agent'
-                        };
-                        const agentName = agentNameMap[event.agentType] || event.agentType;
-
-                        groups.push({
-                            id: event.agentType + '_' + Date.now(),
-                            agentName: agentName,
-                            steps: tasks
+                        setAgentGroups(prev => [
+                            ...(prev || []),
+                            { id: `${agentType}_${Date.now()}`, agentType, agentName, steps: tasks },
+                        ]);
+                    } else if (output.event === 'task_started') {
+                        setAgentGroups(prev => {
+                            if (!prev) return prev;
+                            const groups = [...prev];
+                            const gi = findGroupByAgent(groups, agentType);
+                            if (gi === -1) return prev;
+                            groups[gi] = {
+                                ...groups[gi],
+                                steps: groups[gi].steps.map((s, idx) =>
+                                    idx === output.taskIndex ? { ...s, status: 'processing' } : s
+                                ),
+                            };
+                            return groups;
                         });
-
-                        return groups;
-                    });
+                    } else if (output.event === 'task_completed') {
+                        setAgentGroups(prev => {
+                            if (!prev) return prev;
+                            const groups = [...prev];
+                            const gi = findGroupByAgent(groups, agentType);
+                            if (gi === -1) return prev;
+                            groups[gi] = {
+                                ...groups[gi],
+                                steps: groups[gi].steps.map((s, idx) =>
+                                    idx === output.taskIndex ? { ...s, status: 'completed' } : s
+                                ),
+                            };
+                            return groups;
+                        });
+                    }
                 },
                 (event) => {
-                    setAgentGroups(prev => 
+                    setAgentGroups(prev =>
                         prev ? prev.map(g => ({
                             ...g,
-                            steps: g.steps.map(s => ({ ...s, status: 'completed' }))
+                            steps: g.steps.map(s => ({ ...s, status: 'completed' })),
                         })) : prev
                     );
 
@@ -230,10 +202,10 @@ export default function ChatPage() {
                 },
                 (error) => {
                     logger.error('Agent stream error:', error);
-                    setAgentGroups(prev => 
+                    setAgentGroups(prev =>
                         prev ? prev.map(g => ({
                             ...g,
-                            steps: g.steps.map(s => s.status === 'processing' ? { ...s, status: 'failed' } : s)
+                            steps: g.steps.map(s => s.status === 'processing' ? { ...s, status: 'failed' } : s),
                         })) : prev
                     );
                     setIsTyping(false);

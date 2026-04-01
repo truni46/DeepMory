@@ -160,30 +160,9 @@ class AgentFacade:
             threadId = conversationId or taskId
             config = {"configurable": {"thread_id": threadId}}
 
-            _SKIP_NODES = {"supervisor", "__start__", "__end__"}
-
             finalState = None
             async for state in agentGraph.astream(initialState, config=config):
                 finalState = state
-                nodeKey = list(state.keys())[0] if state else None
-                if nodeKey and nodeKey not in _SKIP_NODES:
-                    nodeState = state[nodeKey]
-                    durationMs = int((time.time() - startTime) * 1000)
-                    outputData = {}
-                    if isinstance(nodeState, dict):
-                        messagesInfo = nodeState.get("messages", [])
-                        outputData["content"] = str(messagesInfo[-1].content) if messagesInfo else ""
-                        if nodeKey == "planner" and "plan" in nodeState:
-                            outputData["plan"] = nodeState.get("plan")
-
-                    await agentRepository.createRun(
-                        taskId=taskId,
-                        agentType=nodeKey,
-                        iterationNum=nodeState.get("iterationCount", 0) if isinstance(nodeState, dict) else 0,
-                        outputData=outputData,
-                        status="completed",
-                        durationMs=durationMs,
-                    )
             if finalState:
                 lastState = list(finalState.values())[0] if finalState else {}
                 if isinstance(lastState, dict):
