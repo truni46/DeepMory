@@ -64,7 +64,9 @@ class QuotaRepository:
                 cutoff = datetime.now() - timedelta(seconds=quotaConfig.sessionDuration)
                 async with db.pool.acquire() as conn:
                     row = await conn.fetchrow(
-                        """SELECT COALESCE(SUM((metadata->>'tokens')::int), 0) as total
+                        """SELECT COALESCE(SUM(
+                               COALESCE((metadata->'usage'->>'totalTokens')::int, (metadata->>'tokens')::int, 0)
+                           ), 0) as total
                            FROM messages
                            WHERE "conversationId" = $1 AND "createdAt" >= $2""",
                         conversationId, cutoff
@@ -86,7 +88,9 @@ class QuotaRepository:
                 weekStart = getWeekStart()
                 async with db.pool.acquire() as conn:
                     row = await conn.fetchrow(
-                        """SELECT COALESCE(SUM((metadata->>'tokens')::int), 0) as total
+                        """SELECT COALESCE(SUM(
+                               COALESCE((m.metadata->'usage'->>'totalTokens')::int, (m.metadata->>'tokens')::int, 0)
+                           ), 0) as total
                            FROM messages m
                            JOIN conversations c ON m."conversationId" = c.id
                            WHERE c."userId" = $1 AND m."createdAt" >= $2::date""",

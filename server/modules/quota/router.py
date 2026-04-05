@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Dict
 from common.deps import getCurrentUser
 from modules.quota.service import quotaService
@@ -17,4 +17,4 @@ async def getQuotaStatus(
         return status
     except Exception as e:
         logger.error(f"getQuotaStatus failed: {e}")
-        raise
+        raise HTTPException(status_code=500, detail=str(e))

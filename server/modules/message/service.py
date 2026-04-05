@@ -133,10 +133,19 @@ class MessageService:
                 self.generateConversationTitle(conversationId, userId, content, fullResponse)
             )
 
+    @staticmethod
+    def stripQuotaMarker(chunk: str):
+        if "__QUOTA__" in chunk:
+            cleanChunk = chunk[:chunk.index("\n__QUOTA__")] if "\n__QUOTA__" in chunk else ""
+            return cleanChunk
+        return chunk
+
     async def processMessage(self, message: str, conversationId: str, history: List[Dict]) -> Dict:
         fullResponse = ""
         async for chunk in self.processMessageFlow("00000000-0000-0000-0000-000000000000", conversationId, message):
-            fullResponse += chunk
+            clean = self.stripQuotaMarker(chunk)
+            if clean:
+                fullResponse += clean
         return {
             "id": str(uuid.uuid4()),
             "aiResponse": fullResponse,
@@ -153,7 +162,9 @@ class MessageService:
         if not cid:
             cid = "unknownConversation"
         async for chunk in self.processMessageFlow("00000000-0000-0000-0000-000000000000", cid, message):
-            yield chunk
+            clean = self.stripQuotaMarker(chunk)
+            if clean:
+                yield clean
 
     async def generateAIResponse(self, message: str, history: List[Dict]) -> str:
         fullResponse = ""
@@ -161,7 +172,9 @@ class MessageService:
         if history:
             cid = history[0].get("conversationId", "unknownConversation")
         async for chunk in self.processMessageFlow("00000000-0000-0000-0000-000000000000", cid, message):
-            fullResponse += chunk
+            clean = self.stripQuotaMarker(chunk)
+            if clean:
+                fullResponse += clean
         return fullResponse
 
     async def generateConversationTitle(

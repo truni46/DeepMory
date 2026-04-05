@@ -249,8 +249,20 @@ class LLMInferenceService:
         return self.provider.modelName
 
     async def generateResponse(self, messages: List[Dict], stream: bool = False, tools: Optional[List[Dict]] = None):
-        """Generate response from LLM"""
-        return await self.provider.generateResponse(messages, stream, tools)
+        """Generate response from LLM. Non-stream calls return content only (unwraps usage tuple)."""
+        result = await self.provider.generateResponse(messages, stream, tools)
+        if stream:
+            return result
+        if isinstance(result, tuple):
+            return result[0]
+        return result
+
+    async def generateResponseWithUsage(self, messages: List[Dict], tools: Optional[List[Dict]] = None):
+        """Generate response and return (content, usageDict) tuple."""
+        result = await self.provider.generateResponse(messages, stream=False, tools=tools)
+        if isinstance(result, tuple):
+            return result
+        return result, None
 
     async def streamResponse(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
         streamGen = await self.generateResponse(messages, stream=True)
