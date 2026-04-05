@@ -4,6 +4,7 @@ from typing import Dict
 from modules.message.service import messageService
 from modules.agents.service import agentService
 from modules.llm.llmProvider import llmProvider
+from modules.quota.service import quotaService
 from common.deps import getCurrentUser
 from schemas import MessageRequest
 from config.logger import logger
@@ -31,6 +32,9 @@ async def classifyMessage(message: str) -> str:
         prompt = CLASSIFY_PROMPT + [{"role": "user", "content": message}]
         logger.info(f"[Step 1] Analyzing user request intent: '{message[:50]}...'")
         result = await llmProvider.provider.generateResponse(prompt, stream=False)
+        # Handle tuple return from updated provider
+        if isinstance(result, tuple):
+            result = result[0]
         classification = result.strip().upper() if isinstance(result, str) else "CHAT"
         if "AGENT" in classification:
             logger.info("[Step 2] Intent -> [AGENT]: Delegating to Agent workflow.")
@@ -67,6 +71,16 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
         if not validation['valid']:
             raise HTTPException(status_code=400, detail={"errors": validation['errors']})
 
+        quotaCheck = await quotaService.checkQuota(str(user["id"]), data.conversationId)
+        if not quotaCheck["allowed"]:
+            async def blockedGenerator():
+                yield f"data: {json.dumps({'quotaExceeded': True, 'quota': quotaCheck})}\n\n"
+            return StreamingResponse(
+                blockedGenerator(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+
         route = await classifyMessage(data.message)
 
         if route == "AGENT":
@@ -94,10 +108,18 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
                     data.message,
                     data.projectId
                 ):
-                    fullResponse += chunk
-                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-
-                yield f"data: {json.dumps({'done': True, 'fullResponse': fullResponse})}\n\n"
+                    if "__QUOTA__" in chunk:
+                        start = chunk.index("__QUOTA__") + len("__QUOTA__")
+                        end = chunk.index("__QUOTA__", start)
+                        quotaJson = chunk[start:end]
+                        cleanChunk = chunk[:chunk.index("\n__QUOTA__")] if "\n__QUOTA__" in chunk else ""
+                        if cleanChunk:
+                            fullResponse += cleanChunk
+                            yield f"data: {json.dumps({'chunk': cleanChunk})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'fullResponse': fullResponse, 'quota': json.loads(quotaJson)})}\n\n"
+                    else:
+                        fullResponse += chunk
+                        yield f"data: {json.dumps({'chunk': chunk})}\n\n"
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
