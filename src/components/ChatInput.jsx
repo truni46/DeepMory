@@ -2,21 +2,41 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import DropdownMenu from './ui/DropdownMenu';
 
 const SLASH_COMMANDS = [
-    { id: '/research', label: '/research', description: 'Search and gather information', command: '/research' },
-    { id: '/plan', label: '/plan', description: 'Create an execution plan', command: '/plan' },
-    { id: '/implement', label: '/implement', description: 'Write code or documents', command: '/implement' },
-    { id: '/report', label: '/report', description: 'Generate a summary report', command: '/report' },
-    { id: '/run', label: '/run', description: 'Execute the full agent pipeline', command: '/run' },
-    { id: '/browser', label: '/browser', description: 'Automate browser actions', command: '/browser' },
+    { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
+    { id: '/agents:plan', label: '/agents:plan', description: 'Create an execution plan', command: '/agents:plan' },
+    { id: '/agents:implement', label: '/agents:implement', description: 'Write code or documents', command: '/agents:implement' },
+    { id: '/agents:report', label: '/agents:report', description: 'Generate a summary report', command: '/agents:report' },
+    { id: '/agents:browser', label: '/agents:browser', description: 'Automate browser actions', command: '/agents:browser' },
 ];
 
-function getSlashCommand(text) {
-    const match = text.match(/^(\/\w+)/);
-    if (!match) return null;
-    return SLASH_COMMANDS.find(c => c.command === match[1]) ? match[1] : null;
+function matchCommand(query) {
+    const q = query.toLowerCase();
+    return SLASH_COMMANDS.find(c => {
+        const full = c.command.slice(1);
+        const short = full.split(':')[1] || full;
+        return full === q || short === q;
+    });
 }
 
-export default function ChatInput({ onSend, disabled = false }) {
+function filterCommands(query) {
+    const q = query.toLowerCase();
+    return SLASH_COMMANDS.filter(c => {
+        const full = c.command.slice(1);
+        const short = full.split(':')[1] || full;
+        return full.startsWith(q) || short.startsWith(q);
+    });
+}
+
+function getSlashCommand(text) {
+    const match = text.match(/^(\/[\w:]+)/);
+    if (!match) return null;
+    const raw = match[1].slice(1);
+    const found = matchCommand(raw);
+    if (!found) return null;
+    return { resolved: found.command, raw: match[1] };
+}
+
+export default function ChatInput({ onSend, disabled = false, quotaBlocked = false }) {
     const [message, setMessage] = useState('');
     const [showCommands, setShowCommands] = useState(false);
     const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
@@ -28,14 +48,11 @@ export default function ChatInput({ onSend, disabled = false }) {
         if (message.startsWith('/')) {
             const query = message.slice(1).toLowerCase().split(' ')[0];
             const hasSpace = message.includes(' ');
-            const exactMatch = SLASH_COMMANDS.some(c => c.command === '/' + query);
-            if (hasSpace && exactMatch) {
+            if (hasSpace && matchCommand(query)) {
                 setShowCommands(false);
                 return;
             }
-            const filtered = SLASH_COMMANDS.filter(c =>
-                c.command.slice(1).startsWith(query) || c.label.toLowerCase().startsWith(query)
-            );
+            const filtered = filterCommands(query);
             setFilteredCommands(filtered);
             setShowCommands(filtered.length > 0);
             setSelectedIndex(0);
@@ -50,8 +67,8 @@ export default function ChatInput({ onSend, disabled = false }) {
 
         const cmd = getSlashCommand(message);
         if (cmd) {
-            const rest = message.slice(cmd.length);
-            const html = `<span class="slash-cmd" style="color:#007E6E;font-weight:600;">${cmd}</span>${escapeHtml(rest)}`;
+            const rest = message.slice(cmd.raw.length);
+            const html = `<span class="slash-cmd" style="color:#007E6E;font-weight:600;">${cmd.raw}</span>${escapeHtml(rest)}`;
             if (el.innerHTML !== html) {
                 const sel = window.getSelection();
                 const offset = getCaretOffset(el);
@@ -87,7 +104,12 @@ export default function ChatInput({ onSend, disabled = false }) {
 
     const handleSend = () => {
         if (message.trim() && !disabled) {
-            onSend(message.trim());
+            let toSend = message.trim();
+            const cmd = getSlashCommand(toSend);
+            if (cmd && cmd.resolved !== cmd.raw) {
+                toSend = cmd.resolved + toSend.slice(cmd.raw.length);
+            }
+            onSend(toSend);
             setMessage('');
             if (editorRef.current) {
                 editorRef.current.textContent = '';
@@ -179,6 +201,14 @@ export default function ChatInput({ onSend, disabled = false }) {
                             style={{ minHeight: '24px' }}
                         />
                     </div>
+
+                    {quotaBlocked && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
+                            <span className="text-sm text-red-600 font-medium">
+                                Quota exceeded. Please wait for reset.
+                            </span>
+                        </div>
+                    )}
 
                     <button
                         onClick={handleSend}

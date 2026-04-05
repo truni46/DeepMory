@@ -5,7 +5,9 @@ import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
 import AgentTaskList from '../components/ui/AgentTaskList';
+import QuotaWidget from '../components/ui/QuotaWidget';
 import conversationService from '../services/conversationService';
+import apiService from '../services/apiService';
 import streamingService from '../services/streamingService';
 import agentStreamService from '../services/agentStreamService';
 import websocketService from '../services/websocketService';
@@ -28,6 +30,9 @@ export default function ChatPage() {
     const [streamingMessage, setStreamingMessage] = useState('');
     const [agentGroups, setAgentGroups] = useState(null);
     const [calledAgent, setCalledAgent] = useState('');
+    const [quotaStatus, setQuotaStatus] = useState(null);
+    const [quotaWarning, setQuotaWarning] = useState(false);
+    const [quotaBlocked, setQuotaBlocked] = useState(false);
 
     const messagesEndRef = useRef(null);
     const justCreatedConversationId = useRef(null);
@@ -65,6 +70,19 @@ export default function ChatPage() {
         }
     }, [activeConversationId]);
 
+    useEffect(() => {
+        const fetchQuota = async () => {
+            try {
+                const status = await apiService.get(`/quota/status?conversationId=${activeConversationId || ''}`);
+                setQuotaStatus(status);
+                setQuotaBlocked(!status.allowed);
+                setQuotaWarning(status.warning);
+            } catch (error) {
+                logger.error('Error fetching quota:', error);
+            }
+        };
+        fetchQuota();
+    }, [activeConversationId]);
 
     const loadMessages = async (conversationId) => {
         try {
@@ -222,7 +240,7 @@ export default function ChatPage() {
 
         if (!currentId) {
             try {
-                const title = messageText.split(' ').slice(0, 4).join(' ') || 'New Conversation';
+                const title = 'New Conversation';
                 const newConv = await conversationService.createConversation(title);
                 currentId = newConv.id;
                 justCreatedConversationId.current = currentId;
@@ -242,16 +260,15 @@ export default function ChatPage() {
         
         // Extract Agent Name from "/"
         let agentName = 'General Assistant';
-        const slashMatch = messageText.match(/^(\/\w+)/);
+        const slashMatch = messageText.match(/^(\/[\w:]+)/);
         if (slashMatch) {
             const cmd = slashMatch[1];
             const nameMap = {
-                '/research': 'Research Agent',
-                '/plan': 'Planning Agent',
-                '/implement': 'Implementation Agent',
-                '/report': 'Reporting Agent',
-                '/run': 'Auto Pipeline',
-                '/browser': 'Browser Agent'
+                '/agents:research': 'Research Agent',
+                '/agents:plan': 'Planning Agent',
+                '/agents:implement': 'Implementation Agent',
+                '/agents:report': 'Reporting Agent',
+                '/agents:browser': 'Browser Agent'
             };
             agentName = nameMap[cmd] || cmd;
         }
@@ -288,6 +305,14 @@ export default function ChatPage() {
                 },
                 (taskId) => {
                     handleAgentTask(taskId, currentId);
+                },
+                (quota, exceeded) => {
+                    setQuotaStatus(quota);
+                    setQuotaWarning(quota.warning);
+                    setQuotaBlocked(!quota.allowed);
+                    if (exceeded) {
+                        setIsTyping(false);
+                    }
                 }
             );
         } catch (error) {
@@ -362,7 +387,8 @@ export default function ChatPage() {
                 )}
             </div>
 
-            <ChatInput onSend={handleSendMessage} disabled={isTyping} />
+            <QuotaWidget quota={quotaStatus} warning={quotaWarning} />
+            <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} />
         </div>
     );
 }
