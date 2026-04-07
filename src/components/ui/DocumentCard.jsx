@@ -1,5 +1,5 @@
 // src/components/ui/DocumentCard.jsx
-import { FiTrash2, FiEye } from 'react-icons/fi';
+import { FiTrash2 } from 'react-icons/fi';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
 const FILE_ICONS = {
@@ -26,7 +26,10 @@ export default function DocumentCard({ document, onView, onDelete }) {
     });
 
     return (
-        <tr className="hover:bg-gray-50 transition-colors border-b border-border-color last:border-0">
+        <tr
+            className="hover:bg-gray-50 transition-colors border-b border-border-color last:border-0 cursor-pointer"
+            onClick={() => onView(document)}
+        >
             <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
                     <span className="text-lg">{icon}</span>
@@ -49,16 +52,9 @@ export default function DocumentCard({ document, onView, onDelete }) {
             </td>
             <td className="px-6 py-4 text-sm text-text-secondary">{date}</td>
             <td className="px-6 py-4">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end">
                     <button
-                        onClick={() => onView(document)}
-                        className="p-2 text-gray-400 hover:text-primary transition-colors rounded hover:bg-primary/10"
-                        title="View details"
-                    >
-                        <FiEye size={16} />
-                    </button>
-                    <button
-                        onClick={() => onDelete(document.id)}
+                        onClick={e => { e.stopPropagation(); onDelete(document.id); }}
                         className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded hover:bg-red-50"
                         title="Delete"
                     >

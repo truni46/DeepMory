@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiX, FiFileText, FiCalendar, FiBookOpen, FiDownload } from 'react-icons/fi';
 import documentService from '../../services/documentService';
 import PDFViewer from './PDFViewer';
+import WordViewer from './WordViewer';
+import ExcelViewer from './ExcelViewer';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
 function formatDate(dateStr) {
@@ -14,7 +16,10 @@ function formatDate(dateStr) {
 export default function DocumentDetailModal({ document, onClose }) {
     const [fileUrl, setFileUrl] = useState(null);
     const [fileError, setFileError] = useState(null);
-    const isPdf = document.fileType === 'pdf';
+    const fileType = document.fileType;
+    const isPdf = fileType === 'pdf';
+    const isWord = fileType === 'docx' || fileType === 'doc';
+    const isExcel = fileType === 'xlsx' || fileType === 'xls';
 
     useEffect(() => {
         let objectUrl = null;
@@ -45,9 +50,7 @@ export default function DocumentDetailModal({ document, onClose }) {
 
                 <div className="flex flex-1 overflow-hidden">
                     <div className="flex-1 border-r border-border-color overflow-hidden">
-                        {isPdf && fileUrl ? (
-                            <PDFViewer fileUrl={fileUrl} />
-                        ) : fileError ? (
+                        {fileError ? (
                             <div className="flex items-center justify-center h-full text-sm text-red-500">
                                 {fileError}
                             </div>
@@ -55,6 +58,12 @@ export default function DocumentDetailModal({ document, onClose }) {
                             <div className="flex items-center justify-center h-full text-sm text-gray-400">
                                 Loading document...
                             </div>
+                        ) : isPdf ? (
+                            <PDFViewer fileUrl={fileUrl} />
+                        ) : isWord ? (
+                            <WordViewer fileUrl={fileUrl} />
+                        ) : isExcel ? (
+                            <ExcelViewer fileUrl={fileUrl} />
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full gap-4">
                                 <FiFileText size={48} className="text-gray-300" />
