@@ -1,0 +1,18 @@
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'personal',
+  ADD COLUMN IF NOT EXISTS "ownerId" UUID,
+  ADD COLUMN IF NOT EXISTS "ownerType" VARCHAR(20) NOT NULL DEFAULT 'user',
+  ADD COLUMN IF NOT EXISTS "storedFilename" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "embeddingError" TEXT,
+  ADD COLUMN IF NOT EXISTS "chunkCount" INT,
+  ADD COLUMN IF NOT EXISTS "pageCount" INT,
+  ADD COLUMN IF NOT EXISTS summary TEXT,
+  ADD COLUMN IF NOT EXISTS "summaryStatus" VARCHAR(20) NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS description TEXT,
+  ADD COLUMN IF NOT EXISTS tags TEXT[];
+
+UPDATE documents SET "ownerId" = "userId" WHERE "ownerId" IS NULL;
+ALTER TABLE documents ALTER COLUMN "ownerId" SET NOT NULL;
+
+UPDATE documents SET "storedFilename" = filename WHERE "storedFilename" IS NULL;
+ALTER TABLE documents ALTER COLUMN "storedFilename" SET NOT NULL;
