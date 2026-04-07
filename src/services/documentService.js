@@ -8,7 +8,7 @@ class DocumentService {
             files.forEach(file => formData.append('files', file));
 
             const xhr = new XMLHttpRequest();
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('accessToken');
 
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable && onProgress) {
@@ -47,7 +47,7 @@ class DocumentService {
     }
 
     async getDocumentFileUrl(documentId) {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('accessToken');
         const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
         const response = await fetch(
             `${baseUrl}/knowledge/documents/${documentId}/file`,
