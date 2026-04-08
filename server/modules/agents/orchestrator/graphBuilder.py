@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any, Dict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
+
+
+def _mergeDict(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """Reducer: merge agent output dicts, newer values win."""
+    return {**a, **b}
 
 from config.logger import logger
 from modules.agents.memory.taskMemory import taskMemory
@@ -19,7 +24,7 @@ from modules.agents.subAgents.testingAgent import testingNode
 
 
 class GraphState(TypedDict):
-    """LangGraph state with Annotated messages for proper append semantics."""
+    """LangGraph state with Annotated fields for proper merge semantics."""
     taskId: str
     userId: str
     conversationId: str | None
@@ -32,11 +37,8 @@ class GraphState(TypedDict):
     errorMessage: str | None
     messages: Annotated[list[BaseMessage], add_messages]
     goal: str
-    researchFindings: list[dict]
-    plan: dict | None
-    implementationResult: dict | None
-    testingResult: dict | None
-    finalReport: str | None
+    threadContext: str | None
+    agentOutputs: Annotated[Dict[str, Any], _mergeDict]
 
 
 def _routeFromSupervisor(state: GraphState) -> str:

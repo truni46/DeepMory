@@ -20,9 +20,9 @@ async def implementNode(state: dict) -> dict:
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
-    plan = state.get("plan") or {}
+    plan = state.get("agentOutputs", {}).get("planner", {}).get("plan") or {}
     iterationCount = state.get("iterationCount", 0)
-    testingResult = state.get("testingResult")
+    testingResult = state.get("agentOutputs", {}).get("testing", {}).get("result")
     try:
         procedural = await agentMemory.recallProcedural("implement", goal, limit=3)
         proceduralText = "\n".join(f"- {m.get('content', '')}" for m in procedural) or "None"
@@ -34,6 +34,7 @@ async def implementNode(state: dict) -> dict:
                 f"{testingResult.get('output', 'Unknown failure')}"
             )
 
+        threadContext = state.get("threadContext") or ""
         conversationMessages = extractConversationContext(state.get("messages", []))
 
         tasks = await taskRunner.generateTasks("implement", f"{goal}{retryContext}", conversationMessages)
@@ -51,6 +52,7 @@ async def implementNode(state: dict) -> dict:
                     "You are an Implement Agent. Execute tasks by writing code or documents. "
                     "Use codeWriter for code files, fileWriter for text/markdown, shellRunner to run commands.\n\n"
                     f"Tech preferences:\n{proceduralText}"
+                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
                 )),
                 *conversationMessages,
                 HumanMessage(content=(
@@ -59,7 +61,10 @@ async def implementNode(state: dict) -> dict:
                 )),
             ]
 
-            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            result = await _reactAgent.ainvoke(
+                {"messages": inputMessages},
+                {"recursion_limit": 10},
+            )
             newMsgs = result["messages"][len(inputMessages):]
             allNewMessages.extend(newMsgs)
 
@@ -86,11 +91,11 @@ async def implementNode(state: dict) -> dict:
         )
 
         return {
-            "implementationResult": implementationResult,
+            "agentOutputs": {"implement": {"result": implementationResult}},
             "currentAgent": "implement",
             "iterationCount": iterationCount + 1,
             "messages": allNewMessages,
         }
     except Exception as e:
-        logger.error(f"implementNode failed taskId={taskId}: {e}")
-        return {"errorMessage": str(e), "status": "failed"}
+        logger.error(f"implementNode failed taskId={taskId}: {type(e).__name__}: {e}")
+        return {"errorMessage": f"{type(e).__name__}: {e}" or "Unknown error", "status": "failed"}

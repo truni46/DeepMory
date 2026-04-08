@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from langchain_core.messages import BaseMessage
 from typing_extensions import TypedDict
@@ -21,13 +21,9 @@ class TaskState(TypedDict):
     errorMessage: Optional[str]
 
     messages: list[BaseMessage]
-
     goal: str
-    researchFindings: list[dict]
-    plan: Optional[dict]
-    implementationResult: Optional[dict]
-    testingResult: Optional[dict]
-    finalReport: Optional[str]
+    threadContext: Optional[str]
+    agentOutputs: Dict[str, Any]
 
 
 def buildInitialState(
@@ -37,6 +33,7 @@ def buildInitialState(
     conversationId: Optional[str] = None,
     projectId: Optional[str] = None,
     messages: Optional[list[BaseMessage]] = None,
+    threadContext: Optional[str] = None,
 ) -> TaskState:
     """Construct the initial TaskState for a new agent task."""
     return TaskState(
@@ -52,9 +49,6 @@ def buildInitialState(
         errorMessage=None,
         messages=messages or [],
         goal=goal,
-        researchFindings=[],
-        plan=None,
-        implementationResult=None,
-        testingResult=None,
-        finalReport=None,
+        threadContext=threadContext,
+        agentOutputs={},
     )

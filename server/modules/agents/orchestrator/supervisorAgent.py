@@ -39,16 +39,21 @@ async def supervisorNode(state: TaskState) -> dict:
         if state.get("status") in ("failed", "cancelled", "completed"):
             return {"nextAgent": "END", "currentAgent": "supervisor"}
 
+        outputs = state.get("agentOutputs", {})
+        testingResult = outputs.get("testing", {}).get("result") or {}
+        threadContext = state.get("threadContext") or ""
+
         stateContext = (
             f"Goal: {state.get('goal', '')}\n"
-            f"Research findings: {'yes' if state.get('researchFindings') else 'no'}\n"
-            f"Plan: {'yes' if state.get('plan') else 'no'}\n"
-            f"Implementation: {'yes' if state.get('implementationResult') else 'no'}\n"
-            f"Testing: {'passed' if (state.get('testingResult') or {}).get('passed') else ('failed' if state.get('testingResult') else 'not run')}\n"
-            f"Final report: {'yes' if state.get('finalReport') else 'no'}\n"
+            f"Research findings: {'yes' if outputs.get('research') else 'no'}\n"
+            f"Plan: {'yes' if outputs.get('planner') else 'no'}\n"
+            f"Implementation: {'yes' if outputs.get('implement') else 'no'}\n"
+            f"Testing: {'passed' if testingResult.get('passed') else ('failed' if outputs.get('testing') else 'not run')}\n"
+            f"Final report: {'yes' if outputs.get('report') else 'no'}\n"
             f"Iteration: {state.get('iterationCount', 0)}/{state.get('maxIterations', 10)}\n"
             f"Status: {state.get('status', 'running')}\n"
             f"Error: {state.get('errorMessage') or 'none'}"
+            + (f"\nPrevious thread work: {threadContext[:200]}" if threadContext else "")
         )
 
         messages = [

@@ -20,7 +20,7 @@ async def plannerNode(state: dict) -> dict:
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
-    findings = state.get("researchFindings", [])
+    findings = state.get("agentOutputs", {}).get("research", {}).get("findings", [])
     try:
         procedural = await agentMemory.recallProcedural("planner", goal, limit=3)
         proceduralText = "\n".join(f"- {m.get('content', '')}" for m in procedural) or "None"
@@ -29,6 +29,7 @@ async def plannerNode(state: dict) -> dict:
             f"- {f.get('content', '')}" for f in findings
         ) or "No research findings available."
 
+        threadContext = state.get("threadContext") or ""
         conversationMessages = extractConversationContext(state.get("messages", []))
 
         tasks = await taskRunner.generateTasks("planner", goal, conversationMessages)
@@ -46,6 +47,7 @@ async def plannerNode(state: dict) -> dict:
                     "You are a Planner Agent. Create a detailed, actionable plan. "
                     "Use createPlan tool to produce a structured plan.\n\n"
                     f"Successful planning patterns:\n{proceduralText}"
+                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
                 )),
                 *conversationMessages,
                 HumanMessage(content=(
@@ -54,7 +56,10 @@ async def plannerNode(state: dict) -> dict:
                 )),
             ]
 
-            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            result = await _reactAgent.ainvoke(
+                {"messages": inputMessages},
+                {"recursion_limit": 10},
+            )
             newMsgs = result["messages"][len(inputMessages):]
             allNewMessages.extend(newMsgs)
 
@@ -94,7 +99,7 @@ async def plannerNode(state: dict) -> dict:
             metadata={"goal": goal},
         )
 
-        return {"plan": plan, "currentAgent": "planner", "messages": allNewMessages}
+        return {"agentOutputs": {"planner": {"plan": plan}}, "currentAgent": "planner", "messages": allNewMessages}
     except Exception as e:
-        logger.error(f"plannerNode failed taskId={taskId}: {e}")
-        return {"errorMessage": str(e), "status": "failed"}
+        logger.error(f"plannerNode failed taskId={taskId}: {type(e).__name__}: {e}")
+        return {"errorMessage": f"{type(e).__name__}: {e}" or "Unknown error", "status": "failed"}

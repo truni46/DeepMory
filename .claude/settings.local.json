@@ -17,7 +17,9 @@
       "Bash(powershell -Command \"Get-Process -Id 5824 | Select-Object Id, ProcessName, Path, CommandLine\")",
       "Bash(powershell -Command \"Stop-Process -Id 5824 -Force\")",
       "Bash(.venv/Scripts/python -c \"import inspect; from lightrag import LightRAG; sig = inspect.signature\\(LightRAG.__init__\\); print\\([p for p in sig.parameters]\\)\")",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(find /d/Work/VTC_Telecom/AI_Tutor/ai-tutor-web -name *agentTask* -o -name *agentRun*)"
     ]
   }
 }

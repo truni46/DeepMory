@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import DropdownMenu from './ui/DropdownMenu';
+import QuotaWidget from './ui/QuotaWidget';
 
 const SLASH_COMMANDS = [
     { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
@@ -36,7 +37,7 @@ function getSlashCommand(text) {
     return { resolved: found.command, raw: match[1] };
 }
 
-export default function ChatInput({ onSend, disabled = false, quotaBlocked = false }) {
+export default function ChatInput({ onSend, disabled = false, quotaBlocked = false, quota = null, quotaWarning = false }) {
     const [message, setMessage] = useState('');
     const [showCommands, setShowCommands] = useState(false);
     const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
@@ -167,7 +168,8 @@ export default function ChatInput({ onSend, disabled = false, quotaBlocked = fal
     return (
         <div className="bg-transparent p-4">
             <div className="max-w-3xl mx-auto">
-                <div className="relative flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
+                <div className="flex items-end gap-2">
+                <div className="relative flex-1 flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
                     <button
                         className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
                         title="Add documents"
@@ -229,6 +231,9 @@ export default function ChatInput({ onSend, disabled = false, quotaBlocked = fal
                             </svg>
                         )}
                     </button>
+
+                </div>
+                <QuotaWidget quota={quota} warning={quotaWarning} inline />
                 </div>
 
                 <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">

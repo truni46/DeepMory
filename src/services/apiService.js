@@ -29,6 +29,12 @@ class APIService {
             const response = await fetch(url, config);
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    // Clear user token and redirect to login
+                    localStorage.removeItem('accessToken');
+                    window.location.href = '/login';
+                }
+                
                 const error = await response.json().catch(() => ({ detail: 'Request failed' }));
                 throw new Error(error.detail || error.error || error.message || `HTTP ${response.status}`);
             }
@@ -83,7 +89,22 @@ class APIService {
     // Download file
     async download(endpoint, filename) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`);
+            const token = localStorage.getItem('accessToken');
+            const config = { headers: {} };
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${this.baseURL}${endpoint}`, config);
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    localStorage.removeItem('accessToken');
+                    window.location.href = '/login';
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const blob = await response.blob();
 
             // Create download link

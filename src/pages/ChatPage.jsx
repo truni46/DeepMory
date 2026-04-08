@@ -5,7 +5,6 @@ import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
 import AgentTaskList from '../components/ui/AgentTaskList';
-import QuotaWidget from '../components/ui/QuotaWidget';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import streamingService from '../services/streamingService';
@@ -387,8 +386,7 @@ export default function ChatPage() {
                 )}
             </div>
 
-            <QuotaWidget quota={quotaStatus} warning={quotaWarning} />
-            <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} />
+            <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} quota={quotaStatus} quotaWarning={quotaWarning} />
         </div>
     );
 }

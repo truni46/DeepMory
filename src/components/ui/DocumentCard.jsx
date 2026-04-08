@@ -2,15 +2,15 @@
 import { FiTrash2 } from 'react-icons/fi';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
-const FILE_ICONS = {
-    pdf:  '📄',
-    docx: '📝',
-    doc:  '📝',
-    xlsx: '📊',
-    xls:  '📊',
-    txt:  '📃',
-    md:   '📃',
-};
+// const FILE_ICONS = {
+//     pdf:  '📄',
+//     docx: '📝',
+//     doc:  '📝',
+//     xlsx: '📊',
+//     xls:  '📊',
+//     txt:  '📃',
+//     md:   '📃',
+// };
 
 function formatFileSize(bytes) {
     if (!bytes) return '—';
@@ -20,7 +20,7 @@ function formatFileSize(bytes) {
 }
 
 export default function DocumentCard({ document, onView, onDelete }) {
-    const icon = FILE_ICONS[document.fileType] || '📄';
+    // const icon = FILE_ICONS[document.fileType] || '📄';
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
     });
@@ -32,7 +32,7 @@ export default function DocumentCard({ document, onView, onDelete }) {
         >
             <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
-                    <span className="text-lg">{icon}</span>
+                    {/* <span className="text-lg">{icon}</span> */}
                     <span
                         className="font-medium text-sm truncate max-w-xs"
                         title={document.filename}

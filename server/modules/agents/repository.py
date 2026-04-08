@@ -90,7 +90,7 @@ class AgentRepository:
                     await conn.execute(
                         """INSERT INTO "agentRuns"
                            ("id","taskId","agentType","iterationNum","input","output","status","durationMs")
-                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)""",
+                           VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8)""",
                         runId, taskId, agentType, iterationNum,
                         json.dumps(inputData or {}),
                         json.dumps(outputData or {}),

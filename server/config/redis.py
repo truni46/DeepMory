@@ -11,5 +11,4 @@ class RedisConfig:
         self.password = os.getenv('REDIS_PASSWORD', None)
         self.db = int(os.getenv('REDIS_DB', 0))
         self.redis_url = f"redis://:{self.password}@{self.host}:{self.port}/{self.db}" if self.password else f"redis://{self.host}:{self.port}/{self.db}"
-        print(self.redis_url)
 redis_config = RedisConfig()

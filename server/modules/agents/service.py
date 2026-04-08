@@ -7,18 +7,18 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from langchain_core.messages import AIMessage, HumanMessage
 
 from config.logger import logger
+from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.orchestrator.graphBuilder import agentGraph
 from modules.agents.orchestrator.taskState import buildInitialState
 from modules.agents.repository import agentRepository
 from modules.message.repository import messageRepository
 
 _COMMAND_MAP = {
-    "/research": "research",
-    "/plan": "plan",
-    "/implement": "implement",
-    "/report": "report",
-    "/run": "run",
-    "/browser": "browser",
+    "/agents:research": "research",
+    "/agents:plan": "plan",
+    "/agents:implement": "implement",
+    "/agents:report": "report",
+    "/agents:browser": "browser",
 }
 
 _CHAT_HISTORY_LIMIT = 30
@@ -98,16 +98,22 @@ class AgentFacade:
             for _ in range(maxPolls):
                 task = await agentRepository.getTask(taskId, userId)
                 if not task:
-                    yield f"data: {json.dumps({'error': 'Task not found'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
                     return
                 runs = await agentRepository.getTaskRuns(taskId)
                 newRuns = runs[lastRunCount:]
                 for run in newRuns:
+                    outputRaw = run.get("output")
+                    if isinstance(outputRaw, str):
+                        try:
+                            outputRaw = json.loads(outputRaw)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
                     event = {
                         "type": "agent_run",
                         "agentType": run.get("agentType"),
                         "status": run.get("status"),
-                        "output": run.get("output"),
+                        "output": outputRaw,
                     }
                     yield f"data: {json.dumps(event, default=str)}\n\n"
                 lastRunCount = len(runs)
@@ -151,26 +157,39 @@ class AgentFacade:
         """Background task: runs the LangGraph graph and persists results."""
         startTime = time.time()
         try:
+            rawHistory = await messageRepository.getByConversation(conversationId, limit=_CHAT_HISTORY_LIMIT) if conversationId else []
             chatHistory = await self._loadChatHistory(conversationId)
+
+            threadContextStr = ""
+            if conversationId:
+                await agentMemory.compactConversation(conversationId, rawHistory)
+                threadContextStr = await agentMemory.getThreadContextString(conversationId)
+
             initialState = buildInitialState(
                 taskId, userId, goal, conversationId, projectId,
                 messages=chatHistory,
+                threadContext=threadContextStr or None,
             )
 
             threadId = conversationId or taskId
             config = {"configurable": {"thread_id": threadId}}
 
             finalState = None
+            lastState = {}
             async for state in agentGraph.astream(initialState, config=config):
                 finalState = state
             if finalState:
                 lastState = list(finalState.values())[0] if finalState else {}
                 if isinstance(lastState, dict):
+                    finalReport = lastState.get("agentOutputs", {}).get("report", {}).get("content")
                     await agentRepository.updateTask(taskId, {
                         "status": lastState.get("status", "completed"),
-                        "finalReport": lastState.get("finalReport"),
+                        "finalReport": finalReport,
                         "errorMessage": lastState.get("errorMessage"),
                     })
+                    if conversationId:
+                        taskSummary = await agentMemory.buildTaskSummary(lastState, taskId, goal)
+                        await agentMemory.addTaskToShortTermMemory(conversationId, taskSummary)
                 else:
                     await agentRepository.updateTask(taskId, {"status": "completed"})
             else:

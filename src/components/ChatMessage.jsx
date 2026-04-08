@@ -2,10 +2,13 @@ import ReactMarkdown from 'react-markdown';
 
 export default function ChatMessage({ message, showTimestamp = true }) {
     const isUser = message.role === 'user';
-    const timestamp = new Date(message.createdAt || message.timestamp).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+    const date = new Date(message.createdAt || message.timestamp);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const timestamp = `${day}/${month}/${year} ${hours}:${minutes}`;
 
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group w-full`}>

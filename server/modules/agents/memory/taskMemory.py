@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, AsyncIterator, Optional
 
@@ -51,15 +52,29 @@ class RedisCheckpointer(BaseCheckpointSaver):
     async def aget_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
         try:
             threadId = config["configurable"].get("thread_id", "unknown")
-            data = await cacheService.get(self._latestKey(threadId))
-            if not data or not isinstance(data, dict):
+            if not cacheService.redis:
                 return None
+            raw = await cacheService.redis.get(self._latestKey(threadId))
+            if not raw:
+                return None
+            # Format: "<meta_json>\n<stype>:<checkpoint_data>"
+            metaLine, sep, rest = raw.partition("\n")
+            if not sep or not rest:
+                # Stale data from old format — discard and start fresh
+                await cacheService.redis.delete(self._latestKey(threadId))
+                return None
+            try:
+                meta = json.loads(metaLine)
+            except Exception:
+                meta = {"source": "loop", "step": 0, "writes": {}, "parents": {}}
+            stype, _, data = rest.partition(":")
+            checkpoint = self.serde.loads_typed((stype, data.encode("latin-1")))
             return CheckpointTuple(
                 config=config,
-                checkpoint=data,
-                metadata={},
+                checkpoint=checkpoint,
+                metadata=meta,
                 parent_config=None,
-                pending_writes=None,
+                pending_writes=[],
             )
         except Exception as e:
             logger.error(
@@ -76,10 +91,15 @@ class RedisCheckpointer(BaseCheckpointSaver):
     ) -> RunnableConfig:
         try:
             threadId = config["configurable"].get("thread_id", "unknown")
-            checkpointId = checkpoint.get("id", "step") if isinstance(checkpoint, dict) else str(id(checkpoint))
-            payload = checkpoint if isinstance(checkpoint, dict) else dict(checkpoint)
-            await cacheService.set(self._latestKey(threadId), payload, expire=_TTL)
-            await cacheService.set(self._stepKey(threadId, str(checkpointId)), payload, expire=_TTL)
+            checkpointId = checkpoint.get("id", "0") if isinstance(checkpoint, dict) else str(id(checkpoint))
+            stype, serialized = self.serde.dumps_typed(checkpoint)
+            if isinstance(serialized, bytes):
+                serialized = serialized.decode("latin-1")
+            metaJson = json.dumps(dict(metadata)) if metadata else "{}"
+            payload = f"{metaJson}\n{stype}:{serialized}"
+            if cacheService.redis:
+                await cacheService.redis.set(self._latestKey(threadId), payload, ex=_TTL)
+                await cacheService.redis.set(self._stepKey(threadId, str(checkpointId)), payload, ex=_TTL)
             return config
         except Exception as e:
             logger.error(

@@ -20,15 +20,17 @@ async def reportNode(state: dict) -> dict:
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
-    testingResult = state.get("testingResult") or {}
-    implementationResult = state.get("implementationResult") or {}
-    plan = state.get("plan") or {}
+    agentOutputs = state.get("agentOutputs", {})
+    testingResult = agentOutputs.get("testing", {}).get("result") or {}
+    implementationResult = agentOutputs.get("implement", {}).get("result") or {}
+    plan = agentOutputs.get("planner", {}).get("plan") or {}
     try:
         procedural = await agentMemory.recallProcedural("report", goal, limit=2)
         proceduralText = "\n".join(f"- {m.get('content', '')}" for m in procedural) or "None"
 
         status = "completed" if testingResult.get("passed") else "partial_failure"
 
+        threadContext = state.get("threadContext") or ""
         conversationMessages = extractConversationContext(state.get("messages", []))
 
         tasks = await taskRunner.generateTasks(
@@ -50,6 +52,7 @@ async def reportNode(state: dict) -> dict:
                     "You are a Report Agent. Create a comprehensive report. "
                     "Use reportWriter to produce a structured markdown report.\n\n"
                     f"Report format preferences:\n{proceduralText}"
+                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
                 )),
                 *conversationMessages,
                 HumanMessage(content=(
@@ -61,7 +64,10 @@ async def reportNode(state: dict) -> dict:
                 )),
             ]
 
-            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            result = await _reactAgent.ainvoke(
+                {"messages": inputMessages},
+                {"recursion_limit": 10},
+            )
             newMsgs = result["messages"][len(inputMessages):]
             allNewMessages.extend(newMsgs)
 
@@ -85,11 +91,11 @@ async def reportNode(state: dict) -> dict:
         )
 
         return {
-            "finalReport": finalContent,
+            "agentOutputs": {"report": {"content": finalContent, "status": status}},
             "status": status,
             "currentAgent": "report",
             "messages": allNewMessages,
         }
     except Exception as e:
-        logger.error(f"reportNode failed taskId={taskId}: {e}")
-        return {"errorMessage": str(e), "status": "failed"}
+        logger.error(f"reportNode failed taskId={taskId}: {type(e).__name__}: {e}")
+        return {"errorMessage": f"{type(e).__name__}: {e}" or "Unknown error", "status": "failed"}

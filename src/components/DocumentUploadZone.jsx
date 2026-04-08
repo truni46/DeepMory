@@ -106,8 +106,6 @@ export default function DocumentUploadZone({ onUploadComplete }) {
 
     return (
         <div className="bg-white rounded-xl border border-border-color p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Upload Document</h2>
-
             <div
                 onDragOver={e => {
                     e.preventDefault();
@@ -125,7 +123,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                     <FiUploadCloud size={22} className="text-gray-500" />
                 </div>
-                <p className="font-medium text-sm">Select Documents</p>
+                <p className="font-medium text-sm">Upload Documents</p>
                 <p className="text-xs text-text-secondary">
                     Drag & drop PDF files here, or click to browse
                 </p>

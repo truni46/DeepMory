@@ -20,11 +20,12 @@ async def testingNode(state: dict) -> dict:
     taskId = state["taskId"]
     userId = state["userId"]
     goal = state["goal"]
-    implementation = state.get("implementationResult") or {}
+    implementation = state.get("agentOutputs", {}).get("implement", {}).get("result") or {}
     try:
         episodic = await agentMemory.recallEpisodic("testing", userId, limit=3)
         episodicText = "\n".join(f"- {m.get('content', '')}" for m in episodic) or "None"
 
+        threadContext = state.get("threadContext") or ""
         conversationMessages = extractConversationContext(state.get("messages", []))
 
         tasks = await taskRunner.generateTasks(
@@ -46,6 +47,7 @@ async def testingNode(state: dict) -> dict:
                     "Use testCaseGenerator to create tests, testRunner to run them, "
                     "validator to check outputs.\n\n"
                     f"Common failure patterns:\n{episodicText}"
+                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
                 )),
                 *conversationMessages,
                 HumanMessage(content=(
@@ -54,7 +56,10 @@ async def testingNode(state: dict) -> dict:
                 )),
             ]
 
-            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            result = await _reactAgent.ainvoke(
+                {"messages": inputMessages},
+                {"recursion_limit": 10},
+            )
             newMsgs = result["messages"][len(inputMessages):]
             allNewMessages.extend(newMsgs)
 
@@ -79,7 +84,7 @@ async def testingNode(state: dict) -> dict:
             metadata={"passed": passed, "goal": goal},
         )
 
-        return {"testingResult": testingResult, "currentAgent": "testing", "messages": allNewMessages}
+        return {"agentOutputs": {"testing": {"result": testingResult}}, "currentAgent": "testing", "messages": allNewMessages}
     except Exception as e:
-        logger.error(f"testingNode failed taskId={taskId}: {e}")
-        return {"errorMessage": str(e), "status": "failed"}
+        logger.error(f"testingNode failed taskId={taskId}: {type(e).__name__}: {e}")
+        return {"errorMessage": f"{type(e).__name__}: {e}" or "Unknown error", "status": "failed"}

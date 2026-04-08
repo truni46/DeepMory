@@ -27,6 +27,7 @@ async def researchNode(state: dict) -> dict:
         episodicText = "\n".join(f"- {m.get('content', '')}" for m in episodic) or "None"
         semanticText = "\n".join(f"- {m.get('content', '')}" for m in semantic) or "None"
 
+        threadContext = state.get("threadContext") or ""
         conversationMessages = extractConversationContext(state.get("messages", []))
 
         tasks = await taskRunner.generateTasks("research", goal, conversationMessages)
@@ -45,12 +46,16 @@ async def researchNode(state: dict) -> dict:
                     "internal knowledge base. Synthesize findings into clear, structured points.\n\n"
                     f"Past research experience:\n{episodicText}\n\n"
                     f"Relevant knowledge:\n{semanticText}"
+                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
                 )),
                 *conversationMessages,
                 HumanMessage(content=f"Execute this research task: {task['description']}"),
             ]
 
-            result = await _reactAgent.ainvoke({"messages": inputMessages})
+            result = await _reactAgent.ainvoke(
+                {"messages": inputMessages},
+                {"recursion_limit": 10},
+            )
             newMsgs = result["messages"][len(inputMessages):]
             allNewMessages.extend(newMsgs)
 
@@ -73,10 +78,10 @@ async def researchNode(state: dict) -> dict:
             )
 
         return {
-            "researchFindings": allFindings,
+            "agentOutputs": {"research": {"findings": allFindings}},
             "currentAgent": "research",
             "messages": allNewMessages,
         }
     except Exception as e:
-        logger.error(f"researchNode failed taskId={taskId}: {e}")
-        return {"errorMessage": str(e), "status": "failed"}
+        logger.error(f"researchNode failed taskId={taskId}: {type(e).__name__}: {e}")
+        return {"errorMessage": f"{type(e).__name__}: {e}" or "Unknown error", "status": "failed"}

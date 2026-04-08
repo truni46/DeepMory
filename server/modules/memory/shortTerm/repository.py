@@ -21,11 +21,11 @@ class ConvMemoryRepository:
 
     @staticmethod
     def _windowKey(conversationId: str) -> str:
-        return f"conv_window:{conversationId}"
+        return f"convWindow:{conversationId}"
 
     @staticmethod
     def _summaryKey(conversationId: str) -> str:
-        return f"conv_summary:{conversationId}"
+        return f"convSummary:{conversationId}"
 
     async def getWindow(self, conversationId: str) -> List[Dict]:
         data = await cacheService.get(self._windowKey(conversationId))
