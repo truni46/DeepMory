@@ -129,10 +129,10 @@ class DocumentService:
     ) -> None:
         try:
             await documentRepository.updateEmbedding(documentId, "processing")
-            await ragService.index(filePath, ownerId, documentId, userId)
+            chunkCount = await ragService.index(filePath, ownerId, documentId, userId)
             pageCount = _extractPageCount(filePath)
             await documentRepository.updateEmbedding(
-                documentId, "completed", chunkCount=1, pageCount=pageCount
+                documentId, "completed", chunkCount=chunkCount, pageCount=pageCount
             )
             logger.info(f"_processDocument completed for {documentId}")
             asyncio.create_task(self._generateSummary(documentId, filePath))
@@ -175,9 +175,73 @@ class DocumentService:
 
     async def getDocument(self, documentId: str, userId: str) -> Optional[Dict]:
         doc = await documentRepository.getById(documentId)
-        if not doc or str(doc.get("userId")) != str(userId):
+        if not doc:
+            logger.warning(f"getDocument: document {documentId} not found in DB")
+            return None
+        if str(doc.get("userId")) != str(userId):
+            logger.warning(f"getDocument: userId mismatch for {documentId} — doc.userId={doc.get('userId')} vs request.userId={userId}")
             return None
         return doc
+
+    async def getDocumentContext(self, documentIds: List[str], userId: str) -> str:
+        parts = []
+        for docId in documentIds:
+            try:
+                doc = await self.getDocument(docId, userId)
+                if not doc:
+                    logger.warning(f"getDocumentContext: document {docId} not found or unauthorized for user {userId}")
+                    continue
+                filePath = doc.get("filePath", "")
+                if not filePath:
+                    logger.warning(f"getDocumentContext: no filePath for document {docId}")
+                    continue
+                text = _readTextContent(filePath, maxChars=8000)
+                if text.strip():
+                    parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
+            except Exception as e:
+                logger.error(f"getDocumentContext failed for document {docId}: {e}")
+        return "\n\n".join(parts)
+
+    async def searchDocumentContext(
+        self, documentIds: List[str], userId: str, query: str
+    ) -> tuple:
+        try:
+            firstDoc = await documentRepository.getById(documentIds[0])
+            namespace = firstDoc.get("ownerId", userId) if firstDoc else userId
+
+            results = await ragService.searchContextByDocumentIds(
+                query=query, namespace=namespace, documentIds=documentIds, limit=5
+            )
+            maxScore = max((r.score for r in results), default=0.0)
+
+            if results and maxScore >= 0.5:
+                contextText = "\n\n".join(r.document.content for r in results)
+                sources = [
+                    {
+                        "filename": r.document.metadata.get("filename"),
+                        "pageNumber": r.document.metadata.get("pageNumber"),
+                    }
+                    for r in results
+                ]
+                return contextText, sources
+
+            parts = []
+            sources = []
+            for docId in documentIds:
+                try:
+                    doc = await self.getDocument(docId, userId)
+                    if not doc:
+                        continue
+                    text = _readTextContent(doc["filePath"], maxChars=8000)
+                    if text.strip():
+                        parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
+                        sources.append({"filename": doc.get("filename"), "pageNumber": None})
+                except Exception as e:
+                    logger.error(f"searchDocumentContext fallback failed for {docId}: {e}")
+            return "\n\n".join(parts), sources
+        except Exception as e:
+            logger.error(f"searchDocumentContext failed: {e}")
+            return "", []
 
     async def deleteDocument(self, userId: str, documentId: str) -> bool:
         result = await documentRepository.delete(documentId, userId)
