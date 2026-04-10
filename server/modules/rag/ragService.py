@@ -1,8 +1,6 @@
 """
-RAG public facade — powered by LightRAG.
-
-This is the ONLY file that memory, knowledge, and message modules import from.
-The public API is identical to the previous custom implementation.
+RAG public facade — supports 'simple' (direct Qdrant) and 'lightrag' providers.
+Switch via RAG_PROVIDER env var (default: simple).
 """
 from __future__ import annotations
 
@@ -11,12 +9,11 @@ import uuid
 from typing import Dict, List, Optional
 
 from config.logger import logger
-from lightrag import QueryParam
-from modules.rag.lightragProvider import lightragProvider
 from modules.rag.repository import Document, SearchResult
 
+
 def _readFile(filePath: str) -> str:
-    """Read file content as text. Supports TXT, MD, HTML directly. PDF/DOCX via extractors."""
+    """Read file content as text. Used by LightRagAdapter."""
     ext = os.path.splitext(filePath)[1].lower()
     try:
         if ext == ".pdf":
@@ -31,16 +28,11 @@ def _readFile(filePath: str) -> str:
             with open(filePath, "r", encoding="utf-8", errors="ignore") as f:
                 return f.read()
     except Exception as e:
-        logger.error(f"Failed to read file '{filePath}': {e}")
+        logger.error(f"_readFile failed for '{filePath}': {e}")
         return ""
 
 
 def _toSearchResults(lightragResponse: str) -> List[SearchResult]:
-    """
-    Convert LightRAG's string response into List[SearchResult].
-    LightRAG returns a single text answer (not individual chunks),
-    so we wrap it as one SearchResult.
-    """
     if not lightragResponse or not lightragResponse.strip():
         return []
     return [
@@ -55,112 +47,126 @@ def _toSearchResults(lightragResponse: str) -> List[SearchResult]:
     ]
 
 
-class RagService:
+class LightRagAdapter:
+    """Wraps lightragProvider — identical behavior to old RagService."""
 
-
-    async def index(
-        self,
-        filePath: str,
-        projectId: str,
-        documentId: str,
-        userId: str,
-    ) -> int:
-        """
-        Read file → insert into project's LightRAG instance.
-        LightRAG handles chunking, entity extraction, and graph building.
-        Returns 1 on success (LightRAG manages chunks internally).
-        """
+    async def index(self, filePath: str, projectId: str, documentId: str, userId: str) -> int:
         try:
+            from lightrag import QueryParam
+            from modules.rag.lightragProvider import lightragProvider
             content = _readFile(filePath)
             if not content.strip():
-                logger.warning(f"No content extracted from '{filePath}'")
                 return 0
-
             instance = await lightragProvider.getInstance(f"project_{projectId}")
-            await instance.ainsert(
-                content,
-                ids=[documentId],
-                file_paths=[filePath],
-            )
-            logger.info(f"LightRAG indexed document {documentId} for project {projectId}")
+            await instance.ainsert(content, ids=[documentId], file_paths=[filePath])
+            logger.info(f"LightRagAdapter: indexed document {documentId} for project {projectId}")
             return 1
         except Exception as e:
-            logger.error(f"LightRAG index failed for document {documentId}: {e}")
+            logger.error(f"LightRagAdapter.index failed for document {documentId}: {e}")
             raise
 
     async def deleteDocumentChunks(self, projectId: str, documentId: str) -> None:
-        """Remove all data for a document from its project's LightRAG instance."""
         try:
+            from modules.rag.lightragProvider import lightragProvider
             instance = await lightragProvider.getInstance(f"project_{projectId}")
             await instance.adelete_by_doc_id(documentId)
-            logger.info(f"LightRAG deleted document {documentId} from project {projectId}")
         except Exception as e:
-            logger.error(f"LightRAG delete failed for document {documentId}: {e}")
+            logger.error(f"LightRagAdapter.deleteDocumentChunks failed for document {documentId}: {e}")
             raise
 
     async def searchContext(
-        self,
-        query: str,
-        projectId: str,
-        limit: int = 5,
-        rerank: bool = False,
-        mode: str = None,
+        self, query: str, projectId: str, limit: int = 5, rerank: bool = False, mode: str = None
     ) -> List[SearchResult]:
-        """
-        Query a project's knowledge graph + vectors.
-        Modes: naive (vector only), local (entity graph), global (summary), hybrid (all).
-        """
         try:
+            from lightrag import QueryParam
+            from modules.rag.lightragProvider import lightragProvider
             instance = await lightragProvider.getInstance(f"project_{projectId}")
             queryMode = mode or os.getenv("LIGHTRAG_QUERY_MODE", "hybrid")
-            result = await instance.aquery(
-                query,
-                param=QueryParam(mode=queryMode, top_k=limit),
-            )
+            result = await instance.aquery(query, param=QueryParam(mode=queryMode, top_k=limit))
             return _toSearchResults(result)
         except Exception as e:
-            logger.warning(f"LightRAG search failed for project {projectId}: {e}")
+            logger.warning(f"LightRagAdapter.searchContext failed for project {projectId}: {e}")
             return []
 
+    async def searchContextByDocumentIds(
+        self, query: str, namespace: str, documentIds: List[str], limit: int = 5
+    ) -> List[SearchResult]:
+        logger.warning("LightRagAdapter.searchContextByDocumentIds not supported — caller will use full-text fallback")
+        return []
+
     async def upsertMemoryVector(
-        self,
-        userId: str,
-        memoryId: str,
-        content: str,
-        metadata: Optional[Dict] = None,
+        self, userId: str, memoryId: str, content: str, metadata: Optional[Dict] = None
     ) -> None:
-        """Insert a user-memory fact into the user's LightRAG instance."""
         try:
+            from modules.rag.lightragProvider import lightragProvider
             instance = await lightragProvider.getInstance(f"user_{userId}")
             await instance.ainsert(content, ids=[memoryId])
         except Exception as e:
-            logger.error(f"LightRAG memory upsert failed for user {userId}: {e}")
+            logger.error(f"LightRagAdapter.upsertMemoryVector failed for user {userId}: {e}")
 
     async def searchMemoryVectors(
-        self,
-        userId: str,
-        query: str,
-        limit: int = 5,
+        self, userId: str, query: str, limit: int = 5
     ) -> List[SearchResult]:
-        """Search over a user's long-term memories via LightRAG."""
         try:
+            from lightrag import QueryParam
+            from modules.rag.lightragProvider import lightragProvider
             instance = await lightragProvider.getInstance(f"user_{userId}")
-            result = await instance.aquery(
-                query,
-                param=QueryParam(mode="hybrid", top_k=limit),
-            )
+            result = await instance.aquery(query, param=QueryParam(mode="hybrid", top_k=limit))
             return _toSearchResults(result)
         except Exception as e:
-            logger.warning(f"LightRAG memory search failed for user {userId}: {e}")
+            logger.warning(f"LightRagAdapter.searchMemoryVectors failed for user {userId}: {e}")
             return []
 
     async def deleteMemoryVector(self, userId: str, memoryId: str) -> None:
-        """Remove a single memory from the user's LightRAG instance."""
         try:
+            from modules.rag.lightragProvider import lightragProvider
             instance = await lightragProvider.getInstance(f"user_{userId}")
             await instance.adelete_by_doc_id(memoryId)
         except Exception as e:
-            logger.error(f"LightRAG memory delete failed for user {userId}: {e}")
+            logger.error(f"LightRagAdapter.deleteMemoryVector failed memoryId={memoryId}: {e}")
+
+
+class RagService:
+    """Public facade — delegates to SimpleRagProvider or LightRagAdapter based on RAG_PROVIDER env."""
+
+    def __init__(self):
+        providerName = os.getenv("RAG_PROVIDER", "simple").lower()
+        if providerName == "lightrag":
+            self._provider = LightRagAdapter()
+            logger.info("RagService: using LightRAG provider")
+        else:
+            from modules.rag.simpleRagProvider import simpleRagProvider
+            self._provider = simpleRagProvider
+            logger.info("RagService: using Simple RAG provider (direct Qdrant + embeddings)")
+
+    async def index(self, filePath: str, projectId: str, documentId: str, userId: str) -> int:
+        return await self._provider.index(filePath, projectId, documentId, userId)
+
+    async def deleteDocumentChunks(self, projectId: str, documentId: str) -> None:
+        return await self._provider.deleteDocumentChunks(projectId, documentId)
+
+    async def searchContext(
+        self, query: str, projectId: str, limit: int = 5, rerank: bool = False, mode: str = None
+    ) -> List[SearchResult]:
+        return await self._provider.searchContext(query, projectId, limit=limit, rerank=rerank, mode=mode)
+
+    async def searchContextByDocumentIds(
+        self, query: str, namespace: str, documentIds: List[str], limit: int = 5
+    ) -> List[SearchResult]:
+        return await self._provider.searchContextByDocumentIds(
+            query=query, namespace=namespace, documentIds=documentIds, limit=limit
+        )
+
+    async def upsertMemoryVector(
+        self, userId: str, memoryId: str, content: str, metadata: Optional[Dict] = None
+    ) -> None:
+        return await self._provider.upsertMemoryVector(userId, memoryId, content, metadata)
+
+    async def searchMemoryVectors(self, userId: str, query: str, limit: int = 5) -> List[SearchResult]:
+        return await self._provider.searchMemoryVectors(userId, query, limit=limit)
+
+    async def deleteMemoryVector(self, userId: str, memoryId: str) -> None:
+        return await self._provider.deleteMemoryVector(userId, memoryId)
 
 
 ragService = RagService()
