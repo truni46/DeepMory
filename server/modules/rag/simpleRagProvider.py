@@ -24,6 +24,8 @@ from modules.rag.repository import Document, SearchResult
 
 
 def _chunkPages(pages: List[ParsedPage], chunkSize: int = 800, overlap: int = 100) -> List[dict]:
+    if overlap >= chunkSize:
+        raise ValueError(f"_chunkPages: overlap ({overlap}) must be less than chunkSize ({chunkSize})")
     chunks = []
     chunkIndex = 0
     for page in pages:
@@ -82,6 +84,7 @@ class SimpleRagProvider:
                 return 0
             chunks = _chunkPages(pages)
             if not chunks:
+                logger.warning(f"SimpleRagProvider.index: no chunks produced from '{filePath}' for document {documentId}")
                 return 0
             texts = [c["text"] for c in chunks]
             vectors = await embeddingService.embedBatch(texts)

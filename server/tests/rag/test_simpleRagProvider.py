@@ -44,3 +44,10 @@ def test_chunkPages_skips_empty_pages():
 def test_chunkPages_empty_input_returns_empty():
     from modules.rag.simpleRagProvider import _chunkPages
     assert _chunkPages([]) == []
+
+
+def test_chunkPages_invalid_overlap_raises():
+    from modules.rag.simpleRagProvider import _chunkPages
+    pages = [ParsedPage(text="abc" * 100, pageNumber=1)]
+    with pytest.raises(ValueError):
+        _chunkPages(pages, chunkSize=50, overlap=50)
