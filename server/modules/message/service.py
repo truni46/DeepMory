@@ -8,6 +8,7 @@ from modules.message.repository import messageRepository
 from modules.llm.llmProvider import llmProvider
 from modules.memory.service import memoryFacade
 from modules.rag.ragService import ragService
+from modules.knowledge.service import documentService
 from modules.settings.service import settingsService
 from modules.conversations.service import conversationService
 from modules.quota.service import quotaService
@@ -57,8 +58,12 @@ class MessageService:
         conversationId: str,
         content: str,
         projectId: str = None,
+        documentIds: List[str] = None,
     ) -> AsyncGenerator[str, None]:
         userMsg = await messageRepository.create(conversationId, "user", content)
+
+        ragSources: list = []
+        documentSources: list = []
 
         logger.info("[Step 3] Building context (Conversation History, RAG, Memory)")
         contextWindow = await memoryFacade.getContextWindow(conversationId)
@@ -68,8 +73,25 @@ class MessageService:
             try:
                 results = await ragService.searchContext(content, projectId, limit=5)
                 ragContext = "\n\n".join(r.document.content for r in results)
+                ragSources = [
+                    {
+                        "filename": r.document.metadata.get("filename"),
+                        "pageNumber": r.document.metadata.get("pageNumber"),
+                    }
+                    for r in results
+                    if r.document.metadata.get("filename")
+                ]
             except Exception as e:
                 logger.warning(f"RAG search failed for project {projectId}: {e}")
+
+        documentContext = ""
+        if documentIds:
+            try:
+                documentContext, documentSources = await documentService.searchDocumentContext(
+                    documentIds, userId, content
+                )
+            except Exception as e:
+                logger.warning(f"processMessageFlow: searchDocumentContext failed for userId {userId}: {e}")
 
         memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
@@ -77,6 +99,8 @@ class MessageService:
         systemPrompt = "You are a helpful AI assistant."
         if ragContext:
             systemPrompt += f"\n\nRelevant Context:\n{ragContext}"
+        if documentContext:
+            systemPrompt += f"\n\nDocument Context:\n{documentContext}"
         if memoryText:
             systemPrompt += f"\n\nKnown about this user:\n{memoryText}"
 
@@ -94,7 +118,7 @@ class MessageService:
                     yield cleanChunk
         except Exception as e:
             logger.error(f"LLM Error — userId: {userId}, conversationId: {conversationId}, error: {e}")
-            errorMsg = "Xin lỗi, hiện tại hệ thống AI đang gặp sự cố kết nối hoặc phản hồi. Vui lòng thử lại sau."
+            errorMsg = "Xin lỗi, hiện tại hệ thống đang gặp sự cố kết nối hoặc phản hồi. Vui lòng thử lại sau."
             if not fullResponse:
                 fullResponse = errorMsg
                 yield errorMsg
@@ -120,6 +144,10 @@ class MessageService:
 
         quotaStatus = await quotaService.getStatus(userId, conversationId)
         yield f"\n__QUOTA__{json.dumps(quotaStatus)}__QUOTA__"
+
+        allSources = [s for s in (ragSources + documentSources) if s.get("filename")]
+        if allSources:
+            yield f"\n__SOURCES__{json.dumps(allSources)}__SOURCES__"
 
         asyncio.create_task(memoryFacade.addTurn(conversationId, "user", content))
         asyncio.create_task(memoryFacade.addTurn(conversationId, "assistant", fullResponse))
