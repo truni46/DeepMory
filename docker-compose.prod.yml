@@ -17,8 +17,6 @@ services:
 
   frontend:
     restart: always
-    ports: !reset
-      - "8080:80"
     logging:
       driver: json-file
       options:
