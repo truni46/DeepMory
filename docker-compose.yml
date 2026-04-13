@@ -15,26 +15,33 @@ services:
       - DB_USER=deepmory
       - DB_PASSWORD=${DB_PASSWORD:-deepmory_pass}
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-deepmory_pass}
       - USE_DATABASE=true
-      # LLM config (using ollama on host via host.docker.internal if needed, or default)
       - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
-      # Qdrant
       - QDRANT_URL=http://qdrant:6333
-      # Neo4j
       - NEO4J_URL=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-deepmory_pass}
-      # LightRAG
       - LIGHTRAG_QUERY_MODE=hybrid
     depends_on:
-      - db
-      - redis
-      - qdrant
-      - neo4j
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      neo4j:
+        condition: service_started
     networks:
       - app_network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
@@ -48,6 +55,12 @@ services:
       - backend
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   db:
     image: postgres:15-alpine
@@ -74,6 +87,11 @@ services:
       - "6379:6379"
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD:-deepmory_pass}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis-commander:
     image: rediscommander/redis-commander:latest
