@@ -25,7 +25,7 @@ export default function Sidebar({
                     <>
                         <div className="flex items-center space-x-2">
                             <img src={logo} alt="Logo" className="w-8 h-8 object-contain" />
-                            <span className="font-semibold text-text-primary text-sm md:text-base">AI-Tutor</span>
+                            <span className="font-semibold text-text-primary text-sm md:text-base">DeepMory</span>
                         </div>
                         <button
                             onClick={() => setIsExpanded(false)}

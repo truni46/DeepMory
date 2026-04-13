@@ -38,8 +38,6 @@ class ConvRAG:
         await convMemoryRepository.clearWindow(conversationId)
         await convMemoryRepository.clearSummary(conversationId)
 
-    # ---- internal ------------------------------------------------------------
-
     async def _summarizeAndTrim(self, conversationId: str, window: List[Dict]) -> None:
         try:
             existingSummary = await convMemoryRepository.getSummary(conversationId)

@@ -18,7 +18,7 @@ async def connect(sid, environ):
     """Handle client connection"""
     logger.info(f"Client connected via WebSocket: {sid}")
     await sio.emit('connected', {
-        'message': 'Connected to AI Tutor server',
+        'message': 'Connected to DeepMory server',
         'socketId': sid,
         'timestamp': str(datetime.now())
     }, room=sid)

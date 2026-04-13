@@ -19,17 +19,13 @@ _SUMMARY_TTL = int(os.getenv("REDIS_SUMMARY_TTL", 86400))
 
 class ConvMemoryRepository:
 
-    # ---- Redis keys ----------------------------------------------------------
-
     @staticmethod
     def _windowKey(conversationId: str) -> str:
-        return f"conv_window:{conversationId}"
+        return f"convWindow:{conversationId}"
 
     @staticmethod
     def _summaryKey(conversationId: str) -> str:
-        return f"conv_summary:{conversationId}"
-
-    # ---- Window (Redis) -------------------------------------------------------
+        return f"convSummary:{conversationId}"
 
     async def getWindow(self, conversationId: str) -> List[Dict]:
         data = await cacheService.get(self._windowKey(conversationId))
@@ -46,8 +42,6 @@ class ConvMemoryRepository:
 
     async def clearWindow(self, conversationId: str) -> None:
         await cacheService.delete(self._windowKey(conversationId))
-
-    # ---- Summary (Redis hot + PostgreSQL cold) --------------------------------
 
     async def getSummary(self, conversationId: str) -> Optional[str]:
         # Try Redis first

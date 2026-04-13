@@ -45,7 +45,7 @@ export default function LoginPage() {
                         {isLogin ? 'Welcome Back!' : 'Create Account'}
                     </h1>
                     <p className="text-primary-light mt-2 opacity-90">
-                        {isLogin ? 'Sign in to continue to AI Tutor' : 'Get started with your AI learning journey'}
+                        {isLogin ? 'Sign in to continue to DeepMory' : 'Get started with DeepMory'}
                     </p>
                 </div>
 

@@ -25,12 +25,7 @@ A modern, feature-rich chatbot application with a modular Python backend and Rea
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   cd d:/Work/VTC_Telecom/AI_Tutor/ai-tutor-web
-   ```
-
-2. **Backend Setup**
+1. **Backend Setup**
    ```bash
    cd server
    python -m venv .venv
@@ -38,7 +33,7 @@ A modern, feature-rich chatbot application with a modular Python backend and Rea
    pip install -r requirements.txt
    ```
 
-3. **Frontend Setup**
+2. **Frontend Setup**
    ```bash
    cd ..
    npm install
@@ -109,13 +104,4 @@ ai-tutor-web/
 ├── src/                      # React Frontend
 ├── data/                     # Data storage (JSON/Uploads)
 └── README.md
-```
-
-## 🧪 Testing
-
-Run verification scripts to ensure everything is working:
-
-```bash
-python server/testing/verifyServices.py
-python server/testing/verify_api.py
 ```

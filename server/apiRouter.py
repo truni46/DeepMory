@@ -7,8 +7,11 @@ from modules.settings.router import router as settingsRouter
 from modules.knowledge.router import router as knowledgeRouter
 from modules.rag.router import router as ragRouter
 from modules.memory.router import router as memoryRouter
+from modules.agents.router import router as agentsRouter
+from modules.quota.router import router as quotaRouter
+from modules.system.router import router as systemRouter
 
-router = APIRouter(prefix="/api")
+router = APIRouter()
 
 router.include_router(authRouter)
 router.include_router(projectsRouter)
@@ -18,3 +21,6 @@ router.include_router(settingsRouter)
 router.include_router(knowledgeRouter)
 router.include_router(ragRouter)
 router.include_router(memoryRouter)
+router.include_router(agentsRouter)
+router.include_router(quotaRouter)
+router.include_router(systemRouter)

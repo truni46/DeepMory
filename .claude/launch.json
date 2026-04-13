@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": ".venv/Scripts/python",
+      "runtimeArgs": ["server/main.py"],
+      "port": 3000
+    },
+    {
+      "name": "Docs Preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "docs", "-l", "4000", "--no-clipboard"],
+      "port": 4000
+    }
+  ]
+}

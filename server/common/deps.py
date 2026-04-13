@@ -9,7 +9,7 @@ from modules.auth.service import authService
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key-change-this")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 async def getCurrentUser(token: Annotated[str, Depends(oauth2_scheme)]) -> Dict:
     credentialsException = HTTPException(

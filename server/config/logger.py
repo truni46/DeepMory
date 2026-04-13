@@ -9,9 +9,11 @@ LOGS_DIR.mkdir(exist_ok=True)
 
 # Custom log levels
 CHAT_LEVEL = 25  # Between INFO and WARNING
+CONN_LEVEL = 24  # Between INFO and WARNING
 API_LEVEL = 23   # Between INFO and WARNING
 
 logging.addLevelName(CHAT_LEVEL, "CHAT")
+logging.addLevelName(CONN_LEVEL, "CONN")
 logging.addLevelName(API_LEVEL, "API")
 
 
@@ -19,6 +21,12 @@ def chat(self, message, *args, **kwargs):
     """Log chat messages"""
     if self.isEnabledFor(CHAT_LEVEL):
         self._log(CHAT_LEVEL, message, args, **kwargs)
+
+
+def conn(self, message, *args, **kwargs):
+    """Log Database operations (Connection & CRUD)"""
+    if self.isEnabledFor(CONN_LEVEL):
+        self._log(CONN_LEVEL, message, args, **kwargs)
 
 
 def api(self, message, *args, **kwargs):
@@ -29,6 +37,7 @@ def api(self, message, *args, **kwargs):
 
 # Add custom methods to Logger
 logging.Logger.chat = chat
+logging.Logger.conn = conn
 logging.Logger.api = api
 
 
@@ -39,6 +48,7 @@ class ColoredFormatter(logging.Formatter):
         'DEBUG': '\033[36m',      # Cyan
         'INFO': '\033[32m',       # Green
         'API': '\033[35m',        # Magenta
+        'CONN': '\033[96m',       # Light Cyan
         'CHAT': '\033[34m',       # Blue
         'WARNING': '\033[33m',    # Yellow
         'ERROR': '\033[31m',      # Red
@@ -56,7 +66,7 @@ def setup_logger():
     """Configure and return the main logger"""
     
     # Create logger
-    logger = logging.getLogger('ai_tutor')
+    logger = logging.getLogger('DeepMory')
     logger.setLevel(logging.DEBUG)
     
     # Prevent duplicate logs
@@ -121,6 +131,17 @@ def setup_logger():
     api_handler.addFilter(lambda record: record.levelno == API_LEVEL)
     api_handler.setFormatter(detailed_formatter)
     logger.addHandler(api_handler)
+    
+    # Connection / DB log file (DB Login & CRUD only)
+    conn_handler = RotatingFileHandler(
+        LOGS_DIR / 'connection.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    conn_handler.setLevel(CONN_LEVEL)
+    conn_handler.addFilter(lambda record: record.levelno == CONN_LEVEL)
+    conn_handler.setFormatter(detailed_formatter)
+    logger.addHandler(conn_handler)
     
     return logger
 

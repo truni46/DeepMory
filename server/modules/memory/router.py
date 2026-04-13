@@ -17,8 +17,6 @@ class MemorySettingsRequest(BaseModel):
     enabled: bool
 
 
-# ---- User memories CRUD ----
-
 @router.get("")
 async def getMemories(currentUser: dict = Depends(getCurrentUser)):
     """Get all memories for the current user."""
@@ -88,8 +86,6 @@ async def deleteMemory(
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"status": "success"}
 
-
-# ---- Memory settings (toggle on/off) ----
 
 @router.get("/settings")
 async def getMemorySettings(currentUser: dict = Depends(getCurrentUser)):

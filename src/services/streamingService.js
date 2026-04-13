@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
  * Server-Sent Events (SSE) Streaming Service
@@ -15,8 +15,10 @@ class StreamingService {
      * @param {Function} onChunk Callback for each chunk
      * @param {Function} onComplete Callback when complete
      * @param {Function} onError Callback on error
+     * @param {Function} onAgentTask Callback when agent task is triggered
+     * @param {Function} onQuota Callback for quota events (quota object, isExceeded)
      */
-    async sendMessage(message, conversationId, onChunk, onComplete, onError) {
+    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota) {
         try {
             const token = localStorage.getItem('accessToken');
             const headers = {
@@ -56,6 +58,16 @@ class StreamingService {
                         try {
                             const data = JSON.parse(line.slice(6));
 
+                            if (data.quotaExceeded && onQuota) {
+                                onQuota(data.quota, true);
+                                return;
+                            }
+
+                            if (data.agentTask && onAgentTask) {
+                                onAgentTask(data.taskId);
+                                return;
+                            }
+
                             if (data.error) {
                                 onError(new Error(data.error));
                                 return;
@@ -66,6 +78,9 @@ class StreamingService {
                             }
 
                             if (data.done) {
+                                if (data.quota && onQuota) {
+                                    onQuota(data.quota, false);
+                                }
                                 onComplete(data.fullResponse);
                                 return;
                             }

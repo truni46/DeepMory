@@ -4,34 +4,50 @@ import { useOutletContext } from 'react-router-dom';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
+import AgentTaskList from '../components/ui/AgentTaskList';
 import conversationService from '../services/conversationService';
+import apiService from '../services/apiService';
 import streamingService from '../services/streamingService';
+import agentStreamService from '../services/agentStreamService';
 import websocketService from '../services/websocketService';
 import logger from '../utils/logger';
 
+const AGENT_NAME_MAP = {
+    research: 'Research Agent',
+    planner: 'Planning Agent',
+    implement: 'Implementation Agent',
+    testing: 'Testing Agent',
+    report: 'Reporting Agent',
+};
+
 export default function ChatPage() {
-    // Context from Layout
     const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
 
-    // Local State (only chat content)
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [streamingMessage, setStreamingMessage] = useState('');
+    const [agentGroups, setAgentGroups] = useState(null);
+    const [calledAgent, setCalledAgent] = useState('');
+    const [quotaStatus, setQuotaStatus] = useState(null);
+    const [quotaWarning, setQuotaWarning] = useState(false);
+    const [quotaBlocked, setQuotaBlocked] = useState(false);
 
     const messagesEndRef = useRef(null);
     const justCreatedConversationId = useRef(null);
 
-    // Scroll to bottom
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isTyping, streamingMessage]);
+    }, [messages, isTyping, streamingMessage, agentGroups]);
 
-    // Cleanup WebSocket
+    useEffect(() => {
+        return () => agentStreamService.cancel();
+    }, []);
+
     useEffect(() => {
         if (settings.communication_mode === 'websocket') {
             connectWebSocket();
@@ -41,11 +57,8 @@ export default function ChatPage() {
         return () => disconnectWebSocket();
     }, [settings.communication_mode]);
 
-    // Load messages when active conversation changes
     useEffect(() => {
         if (activeConversationId) {
-            // If checking a conversation we just created locally, don't fetch from backend (it's empty).
-            // Do NOT call setMessages([]) here, because handleSendMessage already optimistically appended the user's message!
             if (activeConversationId === justCreatedConversationId.current) {
                 justCreatedConversationId.current = null;
             } else {
@@ -54,6 +67,20 @@ export default function ChatPage() {
         } else {
             setMessages([]);
         }
+    }, [activeConversationId]);
+
+    useEffect(() => {
+        const fetchQuota = async () => {
+            try {
+                const status = await apiService.get(`/quota/status?conversationId=${activeConversationId || ''}`);
+                setQuotaStatus(status);
+                setQuotaBlocked(!status.allowed);
+                setQuotaWarning(status.warning);
+            } catch (error) {
+                logger.error('Error fetching quota:', error);
+            }
+        };
+        fetchQuota();
     }, [activeConversationId]);
 
     const loadMessages = async (conversationId) => {
@@ -65,7 +92,6 @@ export default function ChatPage() {
         }
     };
 
-    // WebSocket methods
     const connectWebSocket = () => {
         setConnectionStatus('connecting');
         websocketService.connect(
@@ -89,7 +115,6 @@ export default function ChatPage() {
             setIsTyping(false);
             scrollToBottom();
 
-            // Refresh to show updated title if needed
             if (activeConversationId) {
                 setTimeout(() => loadConversations(), 2500);
             }
@@ -110,21 +135,116 @@ export default function ChatPage() {
         setConnectionStatus('disconnected');
     };
 
+    const handleAgentTask = async (taskId, conversationId) => {
+        setAgentGroups([]);
+
+        const findGroupByAgent = (groups, agentType) => {
+            for (let i = groups.length - 1; i >= 0; i--) {
+                if (groups[i].agentType === agentType) return i;
+            }
+            return -1;
+        };
+
+        try {
+            await agentStreamService.streamTask(
+                taskId,
+                (event) => {
+                    const output = event.output || {};
+                    const agentType = event.agentType;
+
+                    if (output.event === 'tasks_generated') {
+                        const tasks = (output.tasks || []).map((t, idx) => ({
+                            id: `task_${idx}`,
+                            label: t.description || `Task ${idx + 1}`,
+                            status: 'pending',
+                        }));
+                        const agentName = AGENT_NAME_MAP[agentType] || agentType;
+
+                        setAgentGroups(prev => [
+                            ...(prev || []),
+                            { id: `${agentType}_${Date.now()}`, agentType, agentName, steps: tasks },
+                        ]);
+                    } else if (output.event === 'task_started') {
+                        setAgentGroups(prev => {
+                            if (!prev) return prev;
+                            const groups = [...prev];
+                            const gi = findGroupByAgent(groups, agentType);
+                            if (gi === -1) return prev;
+                            groups[gi] = {
+                                ...groups[gi],
+                                steps: groups[gi].steps.map((s, idx) =>
+                                    idx === output.taskIndex ? { ...s, status: 'processing' } : s
+                                ),
+                            };
+                            return groups;
+                        });
+                    } else if (output.event === 'task_completed') {
+                        setAgentGroups(prev => {
+                            if (!prev) return prev;
+                            const groups = [...prev];
+                            const gi = findGroupByAgent(groups, agentType);
+                            if (gi === -1) return prev;
+                            groups[gi] = {
+                                ...groups[gi],
+                                steps: groups[gi].steps.map((s, idx) =>
+                                    idx === output.taskIndex ? { ...s, status: 'completed' } : s
+                                ),
+                            };
+                            return groups;
+                        });
+                    }
+                },
+                (event) => {
+                    setAgentGroups(prev =>
+                        prev ? prev.map(g => ({
+                            ...g,
+                            steps: g.steps.map(s => ({ ...s, status: 'completed' })),
+                        })) : prev
+                    );
+
+                    if (event.finalReport) {
+                        const aiMessage = {
+                            role: 'assistant',
+                            content: event.finalReport,
+                            createdAt: new Date().toISOString(),
+                        };
+                        setMessages(prev => [...prev, aiMessage]);
+                    }
+
+                    setIsTyping(false);
+
+                    if (conversationId) {
+                        setTimeout(() => loadConversations(), 2500);
+                    }
+                },
+                (error) => {
+                    logger.error('Agent stream error:', error);
+                    setAgentGroups(prev =>
+                        prev ? prev.map(g => ({
+                            ...g,
+                            steps: g.steps.map(s => s.status === 'processing' ? { ...s, status: 'failed' } : s),
+                        })) : prev
+                    );
+                    setIsTyping(false);
+                }
+            );
+        } catch (error) {
+            logger.error('Agent stream failed:', error);
+            setIsTyping(false);
+        }
+    };
+
     const handleSendMessage = async (messageText) => {
         let currentId = activeConversationId;
 
-        // Create conversation if none exists (Lazy Creation)
         if (!currentId) {
             try {
-                // Auto-generate title: First 4 words of the message
-                const title = messageText.split(' ').slice(0, 4).join(' ') || 'New Conversation';
-
+                const title = 'New Conversation';
                 const newConv = await conversationService.createConversation(title);
                 currentId = newConv.id;
                 justCreatedConversationId.current = currentId;
-
-                await loadConversations(); // Refresh layout list
-                setActiveConversationId(currentId); // Update layout active ID
+                await loadConversations();
+                setActiveConversationId(currentId);
             } catch (e) {
                 logger.error("Failed to create chat on send", e);
                 return;
@@ -136,13 +256,28 @@ export default function ChatPage() {
             content: messageText,
             createdAt: new Date().toISOString()
         };
+        
+        // Extract Agent Name from "/"
+        let agentName = 'General Assistant';
+        const slashMatch = messageText.match(/^(\/[\w:]+)/);
+        if (slashMatch) {
+            const cmd = slashMatch[1];
+            const nameMap = {
+                '/agents:research': 'Research Agent',
+                '/agents:plan': 'Planning Agent',
+                '/agents:implement': 'Implementation Agent',
+                '/agents:report': 'Reporting Agent',
+                '/agents:browser': 'Browser Agent'
+            };
+            agentName = nameMap[cmd] || cmd;
+        }
+        setCalledAgent(agentName);
+        setAgentGroups(null);
+
         setMessages(prev => [...prev, userMessage]);
         setIsTyping(true);
 
         try {
-            // Force SSE Streaming as per user request
-            // if (settings.communication_mode === 'websocket') { ... } 
-
             setStreamingMessage('');
             await streamingService.sendMessage(
                 messageText,
@@ -158,7 +293,6 @@ export default function ChatPage() {
                     setStreamingMessage('');
                     setIsTyping(false);
 
-                    // Refresh to show updated title if needed
                     if (currentId) {
                         setTimeout(() => loadConversations(), 2500);
                     }
@@ -167,6 +301,17 @@ export default function ChatPage() {
                     logger.error('Stream error:', error);
                     setIsTyping(false);
                     setStreamingMessage('');
+                },
+                (taskId) => {
+                    handleAgentTask(taskId, currentId);
+                },
+                (quota, exceeded) => {
+                    setQuotaStatus(quota);
+                    setQuotaWarning(quota.warning);
+                    setQuotaBlocked(!quota.allowed);
+                    if (exceeded) {
+                        setIsTyping(false);
+                    }
                 }
             );
         } catch (error) {
@@ -178,26 +323,23 @@ export default function ChatPage() {
     const updateConversationTitle = async (id, text) => {
         const title = text.length > 50 ? text.substring(0, 50) + '...' : text;
         await conversationService.updateConversation(id, { title });
-        loadConversations(); // Trigger Layout refresh
+        loadConversations();
     };
 
     return (
         <div className="flex-1 flex flex-col h-full relative">
-            {/* Header */}
             <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center space-x-3">
                     <h2 className="text-sm font-medium text-text-primary">
                         {activeConversationId ? 'Chat' : 'New Conversation'}
                     </h2>
                 </div>
-
                 <div className="flex items-center space-x-2">
                 </div>
             </div>
 
-            {/* Messages Area */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
-                {messages.length === 0 && !isTyping ? (
+                {messages.length === 0 && !isTyping && !agentGroups ? (
                     <div className="h-full flex flex-col items-center justify-center text-center px-4">
                         <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg mb-3">
                             AI
@@ -206,11 +348,6 @@ export default function ChatPage() {
                         <p className="text-sm text-text-secondary max-w-md">
                             Start a conversation by typing a message below.
                         </p>
-                        {/* <div className="prose prose-sm text-center max-w-md text-text-primary mt-2">
-                            <ReactMarkdown>
-                                {settings.welcome_message || "Hello! How can I help you today?\n\nStart a conversation by typing a message below."}
-                            </ReactMarkdown>
-                        </div> */}
                     </div>
                 ) : (
                     <div className="max-w-3xl mx-auto pb-4">
@@ -221,6 +358,18 @@ export default function ChatPage() {
                                 showTimestamp={settings.show_timestamps}
                             />
                         ))}
+                        {agentGroups && agentGroups.length > 0 && (
+                            <div className="mb-4">
+                                {agentGroups.map((group, gIndex) => (
+                                    <div key={group.id} className="mb-4 last:mb-0">
+                                        <div className="flex items-center space-x-2 text-text-primary text-sm font-medium mb-2 pl-1">
+                                            <span>Calling <span className="font-semibold text-primary">{group.agentName}</span>...</span>
+                                        </div>
+                                        <AgentTaskList steps={group.steps} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                         {isTyping && !streamingMessage && <TypingIndicator />}
                         {streamingMessage && (
                             <ChatMessage
@@ -237,7 +386,7 @@ export default function ChatPage() {
                 )}
             </div>
 
-            <ChatInput onSend={handleSendMessage} disabled={isTyping} />
+            <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} quota={quotaStatus} quotaWarning={quotaWarning} />
         </div>
     );
 }

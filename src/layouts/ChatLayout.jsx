@@ -15,7 +15,7 @@ export default function ChatLayout() {
     const [conversations, setConversations] = useState([]);
     const [activeConversationId, setActiveConversationId] = useState(null);
     const [settings, setSettings] = useState({
-        communication_mode: 'websocket',
+        communication_mode: 'streaming',
         show_timestamps: true,
         theme: 'light-green',
         welcome_message: ''

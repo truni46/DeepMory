@@ -2,6 +2,7 @@ from typing import List, Dict, Optional
 import json
 from datetime import datetime
 from config.database import db
+from modules.memory.shortTerm.contextWindowManager import contextWindowManager
 
 class MessageRepository:
     
@@ -11,6 +12,11 @@ class MessageRepository:
         messageId = messageId or str(uuid.uuid4())
         now = datetime.now()
         
+        if metadata is None:
+            metadata = {}
+        if "tokens" not in metadata and content:
+            metadata["tokens"] = contextWindowManager.countTokens(content)
+
         message = {
             'id': messageId,
             'conversationId': conversationId,
@@ -19,7 +25,7 @@ class MessageRepository:
             'model': model,
             'parentId': parentId,
             'createdAt': now.isoformat(),
-            'metadata': metadata or {}
+            'metadata': metadata
         }
         
         if db.useDatabase and db.pool:
@@ -28,7 +34,7 @@ class MessageRepository:
                     """INSERT INTO messages (id, "conversationId", role, content, model, "parentId", metadata, "createdAt") 
                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                        RETURNING *""",
-                    messageId, conversationId, role, content, model, parentId, json.dumps(metadata or {}), now
+                    messageId, conversationId, role, content, model, parentId, json.dumps(metadata), now
                 )
                 return dict(row)
         else:

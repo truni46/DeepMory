@@ -1,3 +1,3 @@
 """
-AI Tutor Backend - Python Package
+DeepMory Backend - Python Package
 """
