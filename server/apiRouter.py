@@ -9,6 +9,7 @@ from modules.rag.router import router as ragRouter
 from modules.memory.router import router as memoryRouter
 from modules.agents.router import router as agentsRouter
 from modules.quota.router import router as quotaRouter
+from modules.system.router import router as systemRouter
 
 router = APIRouter()
 
@@ -22,3 +23,4 @@ router.include_router(ragRouter)
 router.include_router(memoryRouter)
 router.include_router(agentsRouter)
 router.include_router(quotaRouter)
+router.include_router(systemRouter)
