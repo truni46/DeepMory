@@ -5,24 +5,15 @@ services:
     build: ./server
     ports:
       - "3000:3000"
+    env_file: .env
     environment:
-      - PORT=3000
-      - HOST=0.0.0.0
-      - FRONTEND_URL=http://localhost:80
+      # Docker-internal service URLs — override .env localhost values
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=deepmory_db
-      - DB_USER=deepmory
-      - DB_PASSWORD=${DB_PASSWORD:-deepmory_pass}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-deepmory_pass}
-      - USE_DATABASE=true
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
       - QDRANT_URL=http://qdrant:6333
       - NEO4J_URL=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-deepmory_pass}
-      - LIGHTRAG_QUERY_MODE=hybrid
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
     depends_on:
       db:
         condition: service_healthy
@@ -46,9 +37,8 @@ services:
   frontend:
     build:
       context: .
-      args:
-        - VITE_API_URL=http://localhost:3000/api/v1
-        - VITE_SOCKET_URL=http://localhost:3000
+      # VITE_API_URL và VITE_SOCKET_URL mặc định /api/v1 và "" (relative)
+      # nginx proxy /api/ và /socket.io/ về backend — không cần hardcode IP VPS
     ports:
       - "80:80"
     depends_on:
@@ -65,9 +55,9 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=deepmory
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-deepmory_pass}
-      - POSTGRES_DB=deepmory_db
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     ports:
       - "5432:5432"
     networks:
@@ -75,20 +65,20 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U deepmory -d deepmory_db"]
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:alpine
-    command: redis-server --requirepass "${REDIS_PASSWORD:-deepmory_pass}"
+    command: redis-server --requirepass "${REDIS_PASSWORD}"
     ports:
       - "6379:6379"
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD:-deepmory_pass}\" ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -96,7 +86,7 @@ services:
   redis-commander:
     image: rediscommander/redis-commander:latest
     environment:
-      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-deepmory_pass}
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD}
     ports:
       - "8081:8081"
     depends_on:
@@ -121,7 +111,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-deepmory_pass}
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
     volumes:
       - neo4j_data:/data
