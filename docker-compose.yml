@@ -14,6 +14,10 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - NEO4J_URL=bolt://neo4j:7687
       - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+    volumes:
+      # Mount source code — code changes only need restart, not rebuild
+      # Only rebuild image when requirements.txt or Dockerfile changes
+      - ./server:/app
     depends_on:
       db:
         condition: service_healthy
