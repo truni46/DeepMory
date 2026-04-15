@@ -8,12 +8,17 @@ async def reset_db():
         if db.pool:
             async with db.pool.acquire() as conn:
                 logger.info("Dropping tables...")
+                await conn.execute('DROP TABLE IF EXISTS "agentMemoryHistory" CASCADE')
+                await conn.execute('DROP TABLE IF EXISTS "agentMemories" CASCADE')
+                await conn.execute('DROP TABLE IF EXISTS "agentRuns" CASCADE')
+                await conn.execute('DROP TABLE IF EXISTS "agentTasks" CASCADE')
+                await conn.execute('DROP TABLE IF EXISTS "conversationSummaries" CASCADE')
                 await conn.execute("DROP TABLE IF EXISTS messages CASCADE")
                 await conn.execute("DROP TABLE IF EXISTS conversations CASCADE")
                 await conn.execute("DROP TABLE IF EXISTS documents CASCADE")
                 await conn.execute("DROP TABLE IF EXISTS projects CASCADE")
                 await conn.execute("DROP TABLE IF EXISTS memories CASCADE")
-                await conn.execute("DROP TABLE IF EXISTS mcp_servers CASCADE")
+                await conn.execute('DROP TABLE IF EXISTS "mcpServers" CASCADE')
                 await conn.execute("DROP TABLE IF EXISTS settings CASCADE")
                 await conn.execute("DROP TABLE IF EXISTS users CASCADE")
                 logger.info("Tables dropped successfully.")
