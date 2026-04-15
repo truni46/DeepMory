@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-DB_TEST="${POSTGRES_DB}_test"
+DB_TEST="${POSTGRES_DB}Test"
 
 echo "==> Initializing main database: $POSTGRES_DB ..."
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
