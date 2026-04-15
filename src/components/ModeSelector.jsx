@@ -21,7 +21,7 @@ export default function ModeSelector({ mode, onChange }) {
             >
                 <span className="mr-1">⚡</span>
                 WebSocket
-            </button>
-        </div>
+            </button >
+        </div >
     );
 }

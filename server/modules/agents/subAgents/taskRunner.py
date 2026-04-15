@@ -50,7 +50,7 @@ class TaskRunner:
 
             result = await llmProvider.generateResponse(messages, stream=False)
             content = result.content if hasattr(result, "content") else str(result)
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = content.replace("'''json", "").replace("'''", "").strip()
 
             data = json.loads(content)
             rawTasks = data.get("tasks", []) if isinstance(data, dict) else data

@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
-import AgentTaskList from '../components/ui/AgentTaskList';
+import AgentTaskList from '../components/AgentTaskList';
+import QuotaWidget from '../components/QuotaWidget';
+import DocumentSideViewer from '../components/DocumentSideViewer';
+import DocumentListPanel from '../components/DocumentListPanel';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import streamingService from '../services/streamingService';
 import agentStreamService from '../services/agentStreamService';
 import websocketService from '../services/websocketService';
+import documentService from '../services/documentService';
 import logger from '../utils/logger';
 
 const AGENT_NAME_MAP = {
@@ -20,29 +23,100 @@ const AGENT_NAME_MAP = {
     report: 'Reporting Agent',
 };
 
+const SCROLL_THRESHOLD = 120; // px from bottom to consider "at bottom"
+
 export default function ChatPage() {
     const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
 
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState('disconnected');
+    const [isStreaming, setIsStreaming] = useState(false);
     const [streamingMessage, setStreamingMessage] = useState('');
     const [agentGroups, setAgentGroups] = useState(null);
-    const [calledAgent, setCalledAgent] = useState('');
     const [quotaStatus, setQuotaStatus] = useState(null);
     const [quotaWarning, setQuotaWarning] = useState(false);
     const [quotaBlocked, setQuotaBlocked] = useState(false);
+    const [selectedDocs, setSelectedDocs] = useState([]);
+    const [viewingDocument, setViewingDocument] = useState(null);
+    const [viewerWidth, setViewerWidth] = useState(400); // pixels
 
+    const splitPaneRef = useRef(null);
+    const viewerRef = useRef(null);
+    const isResizing = useRef(false);
+    const chatScrollRef = useRef(null);
+    const userScrolledUp = useRef(false);
     const messagesEndRef = useRef(null);
     const justCreatedConversationId = useRef(null);
+    const draftDocsRef = useRef({});
+    const prevConvIdRef = useRef(activeConversationId);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+    // Resize handlers for the document side viewer
+    const startResizing = useCallback(() => {
+        isResizing.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        if (isResizing.current) {
+            isResizing.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            // Sync final DOM width to state (single re-render on release)
+            if (viewerRef.current) {
+                const finalWidth = parseInt(viewerRef.current.style.width, 10);
+                if (!isNaN(finalWidth)) setViewerWidth(finalWidth);
+            }
+        }
+    }, []);
+
+    const resize = useCallback((e) => {
+        if (!isResizing.current || !splitPaneRef.current) return;
+        const containerRect = splitPaneRef.current.getBoundingClientRect();
+        let newWidth = containerRect.right - e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 800) newWidth = 800;
+        // Direct DOM update — avoids React re-render on every mousemove
+        if (viewerRef.current) {
+            viewerRef.current.style.width = `${newWidth}px`;
+        }
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResizing);
+        return () => {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+        };
+    }, [resize, stopResizing]);
+
+    // Save/restore doc selection per conversation
+    useEffect(() => {
+        if (prevConvIdRef.current !== activeConversationId) {
+            draftDocsRef.current[prevConvIdRef.current] = selectedDocs;
+            setSelectedDocs(draftDocsRef.current[activeConversationId] || []);
+            prevConvIdRef.current = activeConversationId;
+        }
+    }, [activeConversationId, selectedDocs]);
+
+    // Smart scroll: only auto-scroll when user is near the bottom
+    const handleChatScroll = useCallback(() => {
+        const el = chatScrollRef.current;
+        if (!el) return;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        userScrolledUp.current = distanceFromBottom > SCROLL_THRESHOLD;
+    }, []);
+
+    const scrollToBottom = useCallback(() => {
+        if (!userScrolledUp.current) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, []);
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isTyping, streamingMessage, agentGroups]);
+    }, [messages, isTyping, streamingMessage, agentGroups, scrollToBottom]);
 
     useEffect(() => {
         return () => agentStreamService.cancel();
@@ -67,6 +141,8 @@ export default function ChatPage() {
         } else {
             setMessages([]);
         }
+        setAgentGroups(null);
+        setViewingDocument(null);
     }, [activeConversationId]);
 
     useEffect(() => {
@@ -93,10 +169,9 @@ export default function ChatPage() {
     };
 
     const connectWebSocket = () => {
-        setConnectionStatus('connecting');
         websocketService.connect(
-            () => setConnectionStatus('connected'),
-            () => setConnectionStatus('disconnected'),
+            () => {},
+            () => {},
             (error) => logger.error('WebSocket error:', error)
         );
 
@@ -132,10 +207,24 @@ export default function ChatPage() {
 
     const disconnectWebSocket = () => {
         websocketService.disconnect();
-        setConnectionStatus('disconnected');
+    };
+
+    const handleStop = () => {
+        streamingService.cancel();
+        if (streamingMessage) {
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: streamingMessage,
+                createdAt: new Date().toISOString()
+            }]);
+        }
+        setStreamingMessage('');
+        setIsTyping(false);
+        setIsStreaming(false);
     };
 
     const handleAgentTask = async (taskId, conversationId) => {
+        setIsStreaming(false);
         setAgentGroups([]);
 
         const findGroupByAgent = (groups, agentType) => {
@@ -256,26 +345,17 @@ export default function ChatPage() {
             content: messageText,
             createdAt: new Date().toISOString()
         };
-        
-        // Extract Agent Name from "/"
-        let agentName = 'General Assistant';
-        const slashMatch = messageText.match(/^(\/[\w:]+)/);
-        if (slashMatch) {
-            const cmd = slashMatch[1];
-            const nameMap = {
-                '/agents:research': 'Research Agent',
-                '/agents:plan': 'Planning Agent',
-                '/agents:implement': 'Implementation Agent',
-                '/agents:report': 'Reporting Agent',
-                '/agents:browser': 'Browser Agent'
-            };
-            agentName = nameMap[cmd] || cmd;
-        }
-        setCalledAgent(agentName);
+
         setAgentGroups(null);
 
         setMessages(prev => [...prev, userMessage]);
         setIsTyping(true);
+        setIsStreaming(true);
+
+        // Reset scroll position lock so new response scrolls into view
+        userScrolledUp.current = false;
+
+        const docIds = selectedDocs.map(d => d.id);
 
         try {
             setStreamingMessage('');
@@ -292,15 +372,21 @@ export default function ChatPage() {
                     setMessages(prev => [...prev, aiMessage]);
                     setStreamingMessage('');
                     setIsTyping(false);
+                    setIsStreaming(false);
+                    // Clear selected docs from input after chat completes
+                    setSelectedDocs([]);
 
                     if (currentId) {
                         setTimeout(() => loadConversations(), 2500);
                     }
                 },
                 (error) => {
-                    logger.error('Stream error:', error);
+                    if (error.name !== 'AbortError') {
+                        logger.error('Stream error:', error);
+                        setStreamingMessage('');
+                    }
                     setIsTyping(false);
-                    setStreamingMessage('');
+                    setIsStreaming(false);
                 },
                 (taskId) => {
                     handleAgentTask(taskId, currentId);
@@ -311,82 +397,183 @@ export default function ChatPage() {
                     setQuotaBlocked(!quota.allowed);
                     if (exceeded) {
                         setIsTyping(false);
+                        setIsStreaming(false);
                     }
-                }
+                },
+                docIds.length > 0 ? docIds : null,
+                (sources) => {
+                    // Sources are attached to the last assistant message after streaming completes
+                    // Currently logged; extend here to attach to message metadata if needed
+                    logger.info('RAG sources received:', sources);
+                },
             );
         } catch (error) {
-            console.error(error);
+            logger.error('handleSendMessage error:', error);
             setIsTyping(false);
+            setIsStreaming(false);
         }
     };
 
-    const updateConversationTitle = async (id, text) => {
-        const title = text.length > 50 ? text.substring(0, 50) + '...' : text;
-        await conversationService.updateConversation(id, { title });
-        loadConversations();
+    const handleCitationClick = async (filename, pageStart, docId, pageEnd = null) => {
+        try {
+            let docInfo = null;
+
+            if (docId) {
+                docInfo = selectedDocs.find(d => d.id === docId);
+            }
+            if (!docInfo && filename) {
+                docInfo = selectedDocs.find(d => d.filename === filename);
+            }
+
+            if (!docInfo) {
+                const docsResult = await documentService.getDocuments();
+                const allDocs = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
+
+                if (docId) {
+                    docInfo = allDocs.find(d => d.id === docId);
+                }
+                if (!docInfo && filename) {
+                    docInfo = allDocs.find(d => d.filename === filename);
+                }
+            }
+
+            if (docInfo) {
+                setViewingDocument({ doc: docInfo, pageStart, pageEnd });
+            } else {
+                setViewingDocument({ doc: { filename, id: docId }, pageStart, pageEnd });
+            }
+        } catch (error) {
+            logger.error('Failed to open citation', error);
+            setViewingDocument({ doc: { filename, id: docId }, pageStart, pageEnd });
+        }
+    };
+
+    const handleDocumentsConfirm = (docs) => {
+        setSelectedDocs(docs);
+    };
+
+    const handleDocumentRemove = (docId) => {
+        setSelectedDocs(prev => prev.filter(d => d.id !== docId));
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full relative">
-            <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shadow-sm z-10">
+        <div className="flex flex-col h-full w-full bg-white relative">
+            {/* Topbar */}
+            <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shadow-sm z-20 flex-shrink-0">
                 <div className="flex items-center space-x-3">
                     <h2 className="text-sm font-medium text-text-primary">
                         {activeConversationId ? 'Chat' : 'New Conversation'}
                     </h2>
                 </div>
                 <div className="flex items-center space-x-2">
+                    {quotaStatus && (
+                        <QuotaWidget quota={quotaStatus} warning={quotaWarning} inline />
+                    )}
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
-                {messages.length === 0 && !isTyping && !agentGroups ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg mb-3">
-                            AI
-                        </div>
-                        <h3 className="text-lg font-semibold text-text-primary mb-1">How can I help you today?</h3>
-                        <p className="text-sm text-text-secondary max-w-md">
-                            Start a conversation by typing a message below.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="max-w-3xl mx-auto pb-4">
-                        {messages.map((msg, index) => (
-                            <ChatMessage
-                                key={index}
-                                message={msg}
-                                showTimestamp={settings.show_timestamps}
-                            />
-                        ))}
-                        {agentGroups && agentGroups.length > 0 && (
-                            <div className="mb-4">
-                                {agentGroups.map((group, gIndex) => (
-                                    <div key={group.id} className="mb-4 last:mb-0">
-                                        <div className="flex items-center space-x-2 text-text-primary text-sm font-medium mb-2 pl-1">
-                                            <span>Calling <span className="font-semibold text-primary">{group.agentName}</span>...</span>
-                                        </div>
-                                        <AgentTaskList steps={group.steps} />
-                                    </div>
+            {/* Content Area (chat + optional side viewer) */}
+            <div className="flex-1 flex w-full relative overflow-hidden bg-page" ref={splitPaneRef}>
+
+                {/* Main Chat Area */}
+                <div className="flex flex-col h-full relative flex-1 min-w-0">
+                    {/* Floating Document List Panel */}
+                    <DocumentListPanel
+                        selectedDocs={selectedDocs}
+                        onRemove={handleDocumentRemove}
+                    />
+                    <div
+                        ref={chatScrollRef}
+                        onScroll={handleChatScroll}
+                        className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6"
+                    >
+                        {messages.length === 0 && !isTyping && !agentGroups ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                                <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg mb-3">
+                                    AI
+                                </div>
+                                <h3 className="text-lg font-semibold text-text-primary mb-1">How can I help you today?</h3>
+                                <p className="text-sm text-text-secondary max-w-md">
+                                    Start a conversation by typing a message below.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="max-w-3xl mx-auto pb-4">
+                                {messages.map((msg, index) => (
+                                    <ChatMessage
+                                        key={index}
+                                        message={msg}
+                                        showTimestamp={settings.show_timestamps}
+                                        onDocumentClick={handleCitationClick}
+                                    />
                                 ))}
+                                {agentGroups && agentGroups.length > 0 && (
+                                    <div className="mb-6">
+                                        {agentGroups.map((group) => (
+                                            <AgentTaskList
+                                                key={group.id}
+                                                steps={group.steps}
+                                                agentName={group.agentName}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                {isTyping && !streamingMessage && <TypingIndicator />}
+                                {streamingMessage && (
+                                    <ChatMessage
+                                        message={{
+                                            role: 'assistant',
+                                            content: streamingMessage,
+                                            createdAt: new Date().toISOString()
+                                        }}
+                                        showTimestamp={false}
+                                    />
+                                )}
+                                <div ref={messagesEndRef} />
                             </div>
                         )}
-                        {isTyping && !streamingMessage && <TypingIndicator />}
-                        {streamingMessage && (
-                            <ChatMessage
-                                message={{
-                                    role: 'assistant',
-                                    content: streamingMessage,
-                                    createdAt: new Date().toISOString()
-                                }}
-                                showTimestamp={false}
-                            />
-                        )}
-                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <ChatInput
+                        conversationId={activeConversationId}
+                        onSend={handleSendMessage}
+                        disabled={isTyping && !isStreaming || quotaBlocked}
+                        quotaBlocked={quotaBlocked}
+                        quota={quotaStatus}
+                        quotaWarning={quotaWarning}
+                        selectedDocs={selectedDocs}
+                        onDocumentsConfirm={handleDocumentsConfirm}
+                        onDocumentRemove={handleDocumentRemove}
+                        isStreaming={isStreaming}
+                        onStop={handleStop}
+                    />
+                </div>
+
+                {/* Resizer */}
+                {viewingDocument && (
+                    <div
+                        className="w-1.5 hover:w-2 bg-transparent hover:bg-gray-300 active:bg-blue-400 cursor-col-resize z-50 flex-shrink-0 transition-colors"
+                        onMouseDown={startResizing}
+                    />
+                )}
+
+                {/* Document Side Viewer */}
+                {viewingDocument && (
+                    <div
+                        ref={viewerRef}
+                        className="h-full bg-white border-l border-border flex-shrink-0 flex flex-col overflow-hidden"
+                        style={{ width: `${viewerWidth}px` }}
+                    >
+                        <DocumentSideViewer
+                            key={`${viewingDocument.doc?.id ?? viewingDocument.doc?.filename}-${viewingDocument.pageStart ?? 'top'}`}
+                            document={viewingDocument.doc}
+                            pageStart={viewingDocument.pageStart}
+                            pageEnd={viewingDocument.pageEnd}
+                            onClose={() => setViewingDocument(null)}
+                        />
                     </div>
                 )}
             </div>
-
-            <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} quota={quotaStatus} quotaWarning={quotaWarning} />
         </div>
     );
 }

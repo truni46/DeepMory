@@ -25,12 +25,12 @@ function FileProgressItem({ item }) {
                 <div
                     className={`h-full rounded-full transition-all duration-200 ${
                         item.status === 'error'
-                            ? 'bg-red-400'
-                            : item.status === 'done'
-                            ? 'bg-green-500'
-                            : 'bg-primary'
+                ? 'bg-red-400'
+                : item.status === 'done'
+                ? 'bg-green-500'
+                : 'bg-primary'
                     }`}
-                    style={{ width: `${item.progress}%` }}
+                style={{ width: `${item.progress}%` }}
                 />
             </div>
         </div>
@@ -59,6 +59,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                     progress: 100,
                     documentId: results[0]?.id || null,
                 });
+                if (onUploadComplete) onUploadComplete();
             } catch (err) {
                 updateItem(item.id, {
                     status: 'error',
@@ -66,7 +67,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 });
             }
         },
-        [updateItem],
+        [updateItem, onUploadComplete],
     );
 
     const processQueue = useCallback(
@@ -74,9 +75,8 @@ export default function DocumentUploadZone({ onUploadComplete }) {
             for (let i = 0; i < items.length; i += MAX_CONCURRENT) {
                 await Promise.all(items.slice(i, i + MAX_CONCURRENT).map(uploadFile));
             }
-            if (onUploadComplete) onUploadComplete();
         },
-        [uploadFile, onUploadComplete],
+        [uploadFile],
     );
 
     const handleFiles = useCallback(
@@ -117,33 +117,35 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${
                     dragOver
                         ? 'border-primary bg-primary/5'
-                        : 'border-gray-300 hover:border-primary/50'
+            : 'border-gray-300 hover:border-primary/50'
                 }`}
             >
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                    <FiUploadCloud size={22} className="text-gray-500" />
-                </div>
-                <p className="font-medium text-sm">Upload Documents</p>
-                <p className="text-xs text-text-secondary">
-                    Drag & drop PDF files here, or click to browse
-                </p>
-                <input
-                    ref={inputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept={ACCEPTED}
-                    onChange={e => handleFiles(e.target.files)}
-                />
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <FiUploadCloud size={22} className="text-gray-500" />
             </div>
-
-            {uploadItems.length > 0 && (
-                <div className="space-y-3 pt-2">
-                    {uploadItems.map(item => (
-                        <FileProgressItem key={item.id} item={item} />
-                    ))}
-                </div>
-            )}
+            <p className="font-medium text-sm">Upload Documents</p>
+            <p className="text-xs text-text-secondary text-center">
+                Drag & drop files here, or click to browse
+            </p>
+            <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept={ACCEPTED}
+                onChange={e => handleFiles(e.target.files)}
+            />
         </div>
+
+            {
+        uploadItems.length > 0 && (
+            <div className="space-y-3 pt-2">
+                {uploadItems.map(item => (
+                    <FileProgressItem key={item.id} item={item} />
+                ))}
+            </div>
+        )
+    }
+        </div >
     );
 }

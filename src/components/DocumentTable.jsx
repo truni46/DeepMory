@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { FiRefreshCw } from 'react-icons/fi';
-import DocumentCard from './ui/DocumentCard';
-import DocumentDetailModal from './ui/DocumentDetailModal';
+import DocumentCard from './DocumentCard';
+import DocumentDetailModal from './DocumentDetailModal';
+import Table from './ui/Table';
 import documentService from '../services/documentService';
 
 const POLL_INTERVAL_MS = 3000;
@@ -18,7 +19,8 @@ export default function DocumentTable({ refreshTrigger }) {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const pollingRef = useRef(null);
 
-    const fetchDocuments = async () => {
+    const fetchDocuments = async (showLoading = false) => {
+        if (showLoading) setLoading(true);
         try {
             const docs = await documentService.getDocuments();
             setDocuments(docs);
@@ -29,28 +31,44 @@ export default function DocumentTable({ refreshTrigger }) {
         }
     };
 
+    // Initial load
     useEffect(() => {
-        setLoading(true);
-        fetchDocuments();
+        fetchDocuments(true);
+    }, []);
+
+    // Refresh when new upload completes — no loading spinner
+    useEffect(() => {
+        if (refreshTrigger > 0) fetchDocuments(false);
     }, [refreshTrigger]);
 
+    // Polling: start when there are processing docs, stop when all done
     useEffect(() => {
-        if (!hasProcessingDocs(documents)) return;
+        const needsPolling = hasProcessingDocs(documents);
 
-        pollingRef.current = setInterval(async () => {
-            try {
-                const docs = await documentService.getDocuments();
-                setDocuments(docs);
-                if (!hasProcessingDocs(docs)) {
-                    clearInterval(pollingRef.current);
+        if (needsPolling && !pollingRef.current) {
+            pollingRef.current = setInterval(async () => {
+                try {
+                    const docs = await documentService.getDocuments();
+                    setDocuments(docs);
+                    if (!hasProcessingDocs(docs)) {
+                        clearInterval(pollingRef.current);
+                        pollingRef.current = null;
+                    }
+                } catch (err) {
+                    console.error('Polling failed:', err);
                 }
-            } catch (err) {
-                console.error('Polling failed:', err);
-            }
-        }, POLL_INTERVAL_MS);
-
-        return () => clearInterval(pollingRef.current);
+            }, POLL_INTERVAL_MS);
+        } else if (!needsPolling && pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
     }, [documents]);
+
+    useEffect(() => {
+        return () => {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+        };
+    }, []);
 
     const handleDelete = async documentId => {
         if (!window.confirm('Delete this document?')) return;
@@ -90,30 +108,16 @@ export default function DocumentTable({ refreshTrigger }) {
                         No documents uploaded yet.
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-text-secondary text-xs font-medium uppercase tracking-wide">
-                                <tr>
-                                    <th className="px-6 py-3">Name</th>
-                                    <th className="px-6 py-3">Type</th>
-                                    <th className="px-6 py-3">Size</th>
-                                    <th className="px-6 py-3">Status</th>
-                                    <th className="px-6 py-3">Uploaded</th>
-                                    <th className="px-6 py-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {documents.map(doc => (
-                                    <DocumentCard
-                                        key={doc.id}
-                                        document={doc}
-                                        onView={setSelectedDoc}
-                                        onDelete={handleDelete}
-                                    />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <Table headers={['Name', 'Type', 'Size', 'Status', 'Uploaded', 'Actions']}>
+                        {documents.map(doc => (
+                            <DocumentCard
+                                key={doc.id}
+                                document={doc}
+                                onView={setSelectedDoc}
+                                onDelete={handleDelete}
+                            />
+                        ))}
+                    </Table>
                 )}
             </div>
 

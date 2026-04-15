@@ -15,40 +15,40 @@ Python backend for AI Tutor chatbot application using FastAPI.
 
 ### 1. Install Dependencies
 
-```bash
+'''bash
 cd server_python
 pip install -r requirements.txt
-```
+'''
 
 ### 2. Configure Environment
 
-The `.env` file is already configured. Modify if needed:
+The '.env' file is already configured. Modify if needed:
 
-```env
+'''env
 PORT=3000
 USE_DATABASE=true
 DB_NAME=ai_tutor_db
 DB_USER=ai_tutor
 DB_PASSWORD=secure_password_123
-```
+'''
 
 ### 3. Run Database Migration (if using PostgreSQL)
 
-```bash
+'''bash
 python migrations/migrate.py
-```
+'''
 
 ### 4. Start the Server
 
-```bash
+'''bash
 # Option 1: Using Python directly
 python main.py
 
 # Option 2: Using Uvicorn
 uvicorn main:socket_app --host 0.0.0.0 --port 3000 --reload
-```
+'''
 
-Server will start on `http://localhost:3000`
+Server will start on 'http://localhost:3000'
 
 ## API Documentation
 
@@ -59,7 +59,7 @@ Once the server is running, visit:
 
 ## Project Structure
 
-```
+'''
 server_python/
 ├── config/
 │   ├── database.py      # Database connection & queries
@@ -79,21 +79,21 @@ server_python/
 ├── main.py              # Application entry point
 ├── requirements.txt     # Python dependencies
 └── .env                 # Environment variables
-```
+'''
 
 ## API Endpoints
 
 All endpoints maintain compatibility with the Node.js version:
 
-- **Health**: `GET /api/health`
-- **Database Status**: `GET /api/db-status`
-- **Conversations**: `GET|POST|PUT|DELETE /api/conversations`
-- **Messages**: `POST /api/messages` (non-streaming)
-- **Streaming**: `POST /api/messages/stream` (SSE)
-- **History**: `GET /api/history/:conversationId`
-- **Search**: `POST /api/history/search`
-- **Settings**: `GET|PUT /api/settings`
-- **Export**: `GET /api/export/:conversationId?format=json|txt|md`
+- **Health**: 'GET /api/health'
+- **Database Status**: 'GET /api/db-status'
+- **Conversations**: 'GET|POST|PUT|DELETE /api/conversations'
+- **Messages**: 'POST /api/messages' (non-streaming)
+- **Streaming**: 'POST /api/messages/stream' (SSE)
+- **History**: 'GET /api/history/:conversationId'
+- **Search**: 'POST /api/history/search'
+- **Settings**: 'GET|PUT /api/settings'
+- **Export**: 'GET /api/export/:conversationId?format=json|txt|md'
 
 ## WebSocket Events
 
@@ -107,17 +107,17 @@ All endpoints maintain compatibility with the Node.js version:
 
 ### Enable Auto-reload
 
-```bash
+'''bash
 uvicorn main:socket_app --reload
-```
+'''
 
 ### View Logs
 
-Logs are stored in `logs/` directory:
-- `combined.log` - All logs
-- `error.log` - Errors only
-- `chat.log` - Chat messages
-- `api.log` - API requests
+Logs are stored in 'logs/' directory:
+- 'combined.log' - All logs
+- 'error.log' - Errors only
+- 'chat.log' - Chat messages
+- 'api.log' - API requests
 
 ## Differences from Node.js Version
 
@@ -133,8 +133,8 @@ The Python backend maintains full API compatibility. Key implementation differen
 
 The React frontend works with zero changes. Just ensure:
 
-1. Python backend runs on `http://localhost:3000`
-2. Frontend `.env` points to `http://localhost:3000`
+1. Python backend runs on 'http://localhost:3000'
+2. Frontend '.env' points to 'http://localhost:3000'
 
 That's it! The frontend will automatically connect to the Python backend.
 
@@ -142,9 +142,9 @@ That's it! The frontend will automatically connect to the Python backend.
 
 For production, use a proper ASGI server:
 
-```bash
+'''bash
 gunicorn main:socket_app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:3000
-```
+'''
 
 ## License
 

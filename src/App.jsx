@@ -16,6 +16,7 @@ function App() {
                     {/* Protected Routes */}
                     <Route element={<ChatLayout />}>
                         <Route path="/" element={<ChatPage />} />
+                        <Route path="/c/:conversationId" element={<ChatPage />} />
                         <Route path="/documents" element={<DocumentsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                     </Route>

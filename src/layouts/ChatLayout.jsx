@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import conversationService from '../services/conversationService';
@@ -11,9 +11,14 @@ export default function ChatLayout() {
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Derive activeConversationId from URL — source of truth for which conversation is open
+    const pathMatch = location.pathname.match(/^\/c\/(.+)/);
+    const activeConversationId = pathMatch ? pathMatch[1] : null;
+
+    const setActiveConversationId = (id) => navigate(id ? `/c/${id}` : '/');
+
     // Lifted State
     const [conversations, setConversations] = useState([]);
-    const [activeConversationId, setActiveConversationId] = useState(null);
     const [settings, setSettings] = useState({
         communication_mode: 'streaming',
         show_timestamps: true,
@@ -34,17 +39,6 @@ export default function ChatLayout() {
         }
     }, [isAuthenticated]);
 
-    // Track if we've handled the initial selection
-    const hasInitialized = useRef(false);
-
-    // Handle initial active conversation based on nav or list
-    useEffect(() => {
-        if (!hasInitialized.current && conversations.length > 0 && !activeConversationId && location.pathname === '/') {
-            setActiveConversationId(conversations[0].id);
-            hasInitialized.current = true;
-        }
-    }, [conversations, activeConversationId, location.pathname]);
-
     const loadConversations = async () => {
         try {
             const convs = await conversationService.getAllConversations();
@@ -64,13 +58,11 @@ export default function ChatLayout() {
     };
 
     const handleNewChat = () => {
-        setActiveConversationId(null);
         navigate('/');
     };
 
     const handleSelectConversation = (id) => {
-        setActiveConversationId(id);
-        navigate('/');
+        navigate(`/c/${id}`);
     };
 
     const handleDeleteRequest = (id) => {
@@ -92,14 +84,10 @@ export default function ChatLayout() {
             setDeletingId(null);
             setItemToDelete(null);
 
-            // Handle active selection
+            // Navigate away if deleted conversation was active
             if (activeConversationId === id) {
                 const remaining = conversations.filter(c => c.id !== id);
-                if (remaining.length > 0) {
-                    setActiveConversationId(remaining[0].id);
-                } else {
-                    setActiveConversationId(null);
-                }
+                navigate(remaining.length > 0 ? `/c/${remaining[0].id}` : '/');
             }
 
             // Perform actual API deletion
@@ -130,14 +118,13 @@ export default function ChatLayout() {
         return (
             <div className="flex h-screen items-center justify-center bg-page">
                 <div className="text-center">
-                    <div className="text-6xl mb-4 animate-bounce">🤖</div>
                     <h2 className="text-xl font-semibold text-primary">Loading...</h2>
                 </div>
             </div>
         );
     }
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !localStorage.getItem('accessToken')) {
         return <Navigate to="/login" replace />;
     }
 

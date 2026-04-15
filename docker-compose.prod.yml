@@ -9,6 +9,8 @@ version: '3.8'
 services:
   backend:
     restart: always
+    environment:
+      - APP_ENV=production
     logging:
       driver: json-file
       options:

@@ -1,10 +1,10 @@
 # Document Management Module Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox ('- [ ]') syntax for tracking.
 
-**Goal:** Rewrite the `knowledge/` module with multi-file upload + progress, async embedding pipeline, AI-generated summaries, and a document detail modal with PDF viewer.
+**Goal:** Rewrite the 'knowledge/' module with multi-file upload + progress, async embedding pipeline, AI-generated summaries, and a document detail modal with PDF viewer.
 
-**Architecture:** Full rewrite of `server/modules/knowledge/` (router, service, repository) with a DB migration to extend the `documents` table. Frontend replaces `DocumentsPage.jsx` with a component tree: `DocumentUploadZone` → `DocumentTable` → `DocumentCard` → `DocumentDetailModal` + `PDFViewer`.
+**Architecture:** Full rewrite of 'server/modules/knowledge/' (router, service, repository) with a DB migration to extend the 'documents' table. Frontend replaces 'DocumentsPage.jsx' with a component tree: 'DocumentUploadZone' → 'DocumentTable' → 'DocumentCard' → 'DocumentDetailModal' + 'PDFViewer'.
 
 **Tech Stack:** FastAPI, asyncpg, asyncio, pypdf, react-pdf (pdfjs-dist), React, Tailwind CSS, XMLHttpRequest (upload progress), pytest, pytest-asyncio
 
@@ -13,34 +13,34 @@
 ## File Map
 
 **Create:**
-- `server/migrations/002_documents_update.sql` — ALTER TABLE to add new columns
-- `server/tests/__init__.py` — pytest package root
-- `server/tests/knowledge/__init__.py`
-- `server/tests/knowledge/test_service.py` — unit tests for pure utility functions
-- `src/components/ui/DocumentStatusBadge.jsx` — reusable status badge
-- `src/components/ui/PDFViewer.jsx` — react-pdf based PDF renderer
-- `src/components/ui/DocumentCard.jsx` — single document table row
-- `src/components/ui/DocumentDetailModal.jsx` — split-panel detail modal
-- `src/components/DocumentUploadZone.jsx` — drag & drop multi-upload with progress
-- `src/components/DocumentTable.jsx` — table with polling
+- 'server/migrations/002_documents_update.sql' — ALTER TABLE to add new columns
+- 'server/tests/__init__.py' — pytest package root
+- 'server/tests/knowledge/__init__.py'
+- 'server/tests/knowledge/test_service.py' — unit tests for pure utility functions
+- 'src/components/ui/DocumentStatusBadge.jsx' — reusable status badge
+- 'src/components/ui/PDFViewer.jsx' — react-pdf based PDF renderer
+- 'src/components/ui/DocumentCard.jsx' — single document table row
+- 'src/components/ui/DocumentDetailModal.jsx' — split-panel detail modal
+- 'src/components/DocumentUploadZone.jsx' — drag & drop multi-upload with progress
+- 'src/components/DocumentTable.jsx' — table with polling
 
 **Rewrite:**
-- `server/modules/knowledge/repository.py` — full CRUD for new schema
-- `server/modules/knowledge/service.py` — upload pipeline + summary generation
-- `server/modules/knowledge/router.py` — new endpoints incl. file serve
-- `src/services/documentService.js` — XHR upload with progress + new API methods
-- `src/pages/DocumentsPage.jsx` — page layout wiring components together
+- 'server/modules/knowledge/repository.py' — full CRUD for new schema
+- 'server/modules/knowledge/service.py' — upload pipeline + summary generation
+- 'server/modules/knowledge/router.py' — new endpoints incl. file serve
+- 'src/services/documentService.js' — XHR upload with progress + new API methods
+- 'src/pages/DocumentsPage.jsx' — page layout wiring components together
 
 ---
 
 ## Task 1: DB Migration
 
 **Files:**
-- Create: `server/migrations/002_documents_update.sql`
+- Create: 'server/migrations/002_documents_update.sql'
 
 - [ ] **Step 1: Write the migration SQL**
 
-```sql
+'''sql
 -- server/migrations/002_documents_update.sql
 
 ALTER TABLE documents
@@ -61,42 +61,42 @@ ALTER TABLE documents ALTER COLUMN "ownerId" SET NOT NULL;
 
 UPDATE documents SET "storedFilename" = filename WHERE "storedFilename" IS NULL;
 ALTER TABLE documents ALTER COLUMN "storedFilename" SET NOT NULL;
-```
+'''
 
 - [ ] **Step 2: Run the migration**
 
-```bash
+'''bash
 # From project root, with DB running
 psql -U $DB_USER -d $DB_NAME -f server/migrations/002_documents_update.sql
-```
+'''
 
-Expected: `ALTER TABLE`, `UPDATE X`, `ALTER TABLE` (×2) — no errors.
+Expected: 'ALTER TABLE', 'UPDATE X', 'ALTER TABLE' (×2) — no errors.
 
 - [ ] **Step 3: Verify columns exist**
 
-```bash
+'''bash
 psql -U $DB_USER -d $DB_NAME -c "\d documents"
-```
+'''
 
-Expected: columns `scope`, `ownerId`, `ownerType`, `storedFilename`, `embeddingError`, `chunkCount`, `pageCount`, `summary`, `summaryStatus`, `description`, `tags` all present.
+Expected: columns 'scope', 'ownerId', 'ownerType', 'storedFilename', 'embeddingError', 'chunkCount', 'pageCount', 'summary', 'summaryStatus', 'description', 'tags' all present.
 
 - [ ] **Step 4: Commit**
 
-```bash
+'''bash
 git add server/migrations/002_documents_update.sql
 git commit -m "feat(knowledge): add migration for extended documents schema"
-```
+'''
 
 ---
 
 ## Task 2: Rewrite repository.py
 
 **Files:**
-- Modify: `server/modules/knowledge/repository.py`
+- Modify: 'server/modules/knowledge/repository.py'
 
 - [ ] **Step 1: Replace the file with the new implementation**
 
-```python
+'''python
 # server/modules/knowledge/repository.py
 from typing import Dict, List, Optional, Tuple
 import uuid
@@ -283,45 +283,45 @@ class DocumentRepository:
 
 
 documentRepository = DocumentRepository()
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/modules/knowledge/repository.py
 git commit -m "feat(knowledge): rewrite repository with extended schema support"
-```
+'''
 
 ---
 
 ## Task 3: Set up pytest + write tests for service utilities
 
 **Files:**
-- Create: `server/tests/__init__.py`
-- Create: `server/tests/knowledge/__init__.py`
-- Create: `server/tests/knowledge/test_service.py`
+- Create: 'server/tests/__init__.py'
+- Create: 'server/tests/knowledge/__init__.py'
+- Create: 'server/tests/knowledge/test_service.py'
 
 - [ ] **Step 1: Install test dependencies**
 
-```bash
+'''bash
 # Activate venv first
 source .venv/bin/activate   # Linux/Mac
 # .venv\Scripts\activate    # Windows
 
 pip install pytest pytest-asyncio
-```
+'''
 
 - [ ] **Step 2: Create pytest package files**
 
-```bash
+'''bash
 # Create empty __init__.py files
 touch server/tests/__init__.py
 touch server/tests/knowledge/__init__.py
-```
+'''
 
-- [ ] **Step 3: Write failing tests for `_computeHash` and `_extractPageCount`**
+- [ ] **Step 3: Write failing tests for '_computeHash' and '_extractPageCount'**
 
-```python
+'''python
 # server/tests/knowledge/test_service.py
 import hashlib
 import pytest
@@ -347,33 +347,33 @@ def test_computeHash_empty_bytes():
 def test_computeHash_same_content_gives_same_hash():
     from modules.knowledge.service import _computeHash
     assert _computeHash(b"test") == _computeHash(b"test")
-```
+'''
 
 - [ ] **Step 4: Run tests — expect ImportError (module not written yet)**
 
-```bash
+'''bash
 cd server && python -m pytest tests/knowledge/test_service.py -v
-```
+'''
 
-Expected: `ImportError` or `ModuleNotFoundError` — the functions don't exist yet. This is the failing-test step.
+Expected: 'ImportError' or 'ModuleNotFoundError' — the functions don't exist yet. This is the failing-test step.
 
 - [ ] **Step 5: Commit failing tests**
 
-```bash
+'''bash
 git add server/tests/
 git commit -m "test(knowledge): add failing tests for service utility functions"
-```
+'''
 
 ---
 
 ## Task 4: Rewrite service.py
 
 **Files:**
-- Modify: `server/modules/knowledge/service.py`
+- Modify: 'server/modules/knowledge/service.py'
 
 - [ ] **Step 1: Replace the file with the new implementation**
 
-```python
+'''python
 # server/modules/knowledge/service.py
 import asyncio
 import hashlib
@@ -573,40 +573,40 @@ class DocumentService:
 
 
 documentService = DocumentService()
-```
+'''
 
 - [ ] **Step 2: Run the tests — should pass now**
 
-```bash
+'''bash
 cd server && python -m pytest tests/knowledge/test_service.py -v
-```
+'''
 
 Expected output:
-```
+'''
 PASSED tests/knowledge/test_service.py::test_computeHash_returns_sha256_hex
 PASSED tests/knowledge/test_service.py::test_computeHash_different_content_gives_different_hash
 PASSED tests/knowledge/test_service.py::test_computeHash_empty_bytes
 PASSED tests/knowledge/test_service.py::test_computeHash_same_content_gives_same_hash
 4 passed
-```
+'''
 
 - [ ] **Step 3: Commit**
 
-```bash
+'''bash
 git add server/modules/knowledge/service.py
 git commit -m "feat(knowledge): rewrite service with multi-upload, embedding pipeline, AI summary"
-```
+'''
 
 ---
 
 ## Task 5: Rewrite router.py
 
 **Files:**
-- Modify: `server/modules/knowledge/router.py`
+- Modify: 'server/modules/knowledge/router.py'
 
 - [ ] **Step 1: Replace the file**
 
-```python
+'''python
 # server/modules/knowledge/router.py
 import os
 from typing import List, Optional
@@ -726,49 +726,49 @@ async def updateDocument(
     currentUser: dict = Depends(getCurrentUser),
 ):
     raise HTTPException(status_code=501, detail="Not implemented")
-```
+'''
 
 - [ ] **Step 2: Restart the backend and smoke test**
 
-```bash
+'''bash
 # In server/ directory, start the server
 uvicorn main:app --reload --port 3000
-```
+'''
 
 Then in another terminal:
-```bash
+'''bash
 # Get a JWT token first, then:
 curl -X GET http://localhost:3000/api/v1/knowledge/documents \
   -H "Authorization: Bearer <your_token>"
-```
+'''
 
-Expected: `[]` (empty array) — no errors, 200 OK.
+Expected: '[]' (empty array) — no errors, 200 OK.
 
 - [ ] **Step 3: Commit**
 
-```bash
+'''bash
 git add server/modules/knowledge/router.py
 git commit -m "feat(knowledge): rewrite router with multi-upload, file serve, and detail endpoints"
-```
+'''
 
 ---
 
 ## Task 6: Install react-pdf + rewrite documentService.js
 
 **Files:**
-- Modify: `src/services/documentService.js`
+- Modify: 'src/services/documentService.js'
 
 - [ ] **Step 1: Install react-pdf**
 
-```bash
+'''bash
 npm install react-pdf
-```
+'''
 
-Expected: `added N packages` — no peer-dep errors.
+Expected: 'added N packages' — no peer-dep errors.
 
 - [ ] **Step 2: Replace documentService.js**
 
-```javascript
+'''javascript
 // src/services/documentService.js
 import apiService from './apiService';
 
@@ -802,27 +802,27 @@ class DocumentService {
             xhr.onerror = () => reject(new Error('Network error during upload'));
 
             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-            xhr.open('POST', `${baseUrl}/knowledge/documents/upload?scope=${scope}`);
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.open('POST', '${baseUrl}/knowledge/documents/upload?scope=${scope}');
+            xhr.setRequestHeader('Authorization', 'Bearer ${token}');
             xhr.send(formData);
         });
     }
 
     async getDocuments(scope = null) {
-        const params = scope ? `?scope=${scope}` : '';
-        return apiService.get(`/knowledge/documents${params}`);
+        const params = scope ? '?scope=${scope}' : '';
+        return apiService.get('/knowledge/documents${params}');
     }
 
     async getDocument(documentId) {
-        return apiService.get(`/knowledge/documents/${documentId}`);
+        return apiService.get('/knowledge/documents/${documentId}');
     }
 
     async getDocumentFileUrl(documentId) {
         const token = localStorage.getItem('token');
         const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
         const response = await fetch(
-            `${baseUrl}/knowledge/documents/${documentId}/file`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            '${baseUrl}/knowledge/documents/${documentId}/file',
+            { headers: { Authorization: 'Bearer ${token}' } }
         );
         if (!response.ok) throw new Error('Failed to fetch file');
         const blob = await response.blob();
@@ -830,30 +830,30 @@ class DocumentService {
     }
 
     async deleteDocument(documentId) {
-        return apiService.delete(`/knowledge/documents/${documentId}`);
+        return apiService.delete('/knowledge/documents/${documentId}');
     }
 }
 
 export default new DocumentService();
-```
+'''
 
 - [ ] **Step 3: Commit**
 
-```bash
+'''bash
 git add src/services/documentService.js package.json package-lock.json
 git commit -m "feat(knowledge): rewrite documentService with XHR progress upload and file URL support"
-```
+'''
 
 ---
 
 ## Task 7: Create DocumentStatusBadge.jsx
 
 **Files:**
-- Create: `src/components/ui/DocumentStatusBadge.jsx`
+- Create: 'src/components/ui/DocumentStatusBadge.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/ui/DocumentStatusBadge.jsx
 export default function DocumentStatusBadge({ status }) {
     const config = {
@@ -865,7 +865,7 @@ export default function DocumentStatusBadge({ status }) {
     const { label, className, spinner } = config[status] || config.pending;
 
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${className}`}>
+        <span className={'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${className}'}>
             {spinner && (
                 <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
             )}
@@ -873,25 +873,25 @@ export default function DocumentStatusBadge({ status }) {
         </span>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/ui/DocumentStatusBadge.jsx
 git commit -m "feat(knowledge): add DocumentStatusBadge reusable component"
-```
+'''
 
 ---
 
 ## Task 8: Create PDFViewer.jsx
 
 **Files:**
-- Create: `src/components/ui/PDFViewer.jsx`
+- Create: 'src/components/ui/PDFViewer.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/ui/PDFViewer.jsx
 import { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -952,25 +952,25 @@ export default function PDFViewer({ fileUrl }) {
         </div>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/ui/PDFViewer.jsx
 git commit -m "feat(knowledge): add PDFViewer component with react-pdf"
-```
+'''
 
 ---
 
 ## Task 9: Create DocumentCard.jsx
 
 **Files:**
-- Create: `src/components/ui/DocumentCard.jsx`
+- Create: 'src/components/ui/DocumentCard.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/ui/DocumentCard.jsx
 import { FiTrash2, FiEye } from 'react-icons/fi';
 import DocumentStatusBadge from './DocumentStatusBadge';
@@ -987,9 +987,9 @@ const FILE_ICONS = {
 
 function formatFileSize(bytes) {
     if (!bytes) return '—';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024) return '${bytes} B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toFixed(1)} MB';
 }
 
 export default function DocumentCard({ document, onView, onDelete }) {
@@ -1042,25 +1042,25 @@ export default function DocumentCard({ document, onView, onDelete }) {
         </tr>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/ui/DocumentCard.jsx
 git commit -m "feat(knowledge): add DocumentCard table row component"
-```
+'''
 
 ---
 
 ## Task 10: Create DocumentDetailModal.jsx
 
 **Files:**
-- Create: `src/components/ui/DocumentDetailModal.jsx`
+- Create: 'src/components/ui/DocumentDetailModal.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/ui/DocumentDetailModal.jsx
 import { useState, useEffect } from 'react';
 import { FiX, FiFileText, FiCalendar, FiBookOpen, FiDownload } from 'react-icons/fi';
@@ -1196,25 +1196,25 @@ export default function DocumentDetailModal({ document, onClose }) {
         </div>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/ui/DocumentDetailModal.jsx
 git commit -m "feat(knowledge): add DocumentDetailModal with PDF viewer and AI summary panel"
-```
+'''
 
 ---
 
 ## Task 11: Create DocumentUploadZone.jsx
 
 **Files:**
-- Create: `src/components/DocumentUploadZone.jsx`
+- Create: 'src/components/DocumentUploadZone.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/DocumentUploadZone.jsx
 import { useState, useRef, useCallback } from 'react';
 import { FiUploadCloud, FiCheck, FiAlertCircle } from 'react-icons/fi';
@@ -1234,20 +1234,20 @@ function FileProgressItem({ item }) {
                     {item.status === 'done' && <FiCheck size={14} className="text-green-600" />}
                     {item.status === 'error' && <FiAlertCircle size={14} className="text-red-500" />}
                     <span className="text-text-secondary">
-                        {item.status === 'error' ? item.errorMessage : `${item.progress}%`}
+                        {item.status === 'error' ? item.errorMessage : '${item.progress}%'}
                     </span>
                 </div>
             </div>
             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                    className={`h-full rounded-full transition-all duration-200 ${
+                    className={'h-full rounded-full transition-all duration-200 ${
                         item.status === 'error'
                             ? 'bg-red-400'
                             : item.status === 'done'
                             ? 'bg-green-500'
                             : 'bg-primary'
-                    }`}
-                    style={{ width: `${item.progress}%` }}
+                    }'}
+                    style={{ width: '${item.progress}%' }}
                 />
             </div>
         </div>
@@ -1333,11 +1333,11 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 onClick={() => inputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${
+                className={'border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${
                     dragOver
                         ? 'border-primary bg-primary/5'
                         : 'border-gray-300 hover:border-primary/50'
-                }`}
+                }'}
             >
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                     <FiUploadCloud size={22} className="text-gray-500" />
@@ -1366,25 +1366,25 @@ export default function DocumentUploadZone({ onUploadComplete }) {
         </div>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/DocumentUploadZone.jsx
 git commit -m "feat(knowledge): add DocumentUploadZone with drag-drop and per-file progress bars"
-```
+'''
 
 ---
 
 ## Task 12: Create DocumentTable.jsx
 
 **Files:**
-- Create: `src/components/DocumentTable.jsx`
+- Create: 'src/components/DocumentTable.jsx'
 
 - [ ] **Step 1: Create the component**
 
-```jsx
+'''jsx
 // src/components/DocumentTable.jsx
 import { useState, useEffect, useRef } from 'react';
 import { FiRefreshCw } from 'react-icons/fi';
@@ -1514,25 +1514,25 @@ export default function DocumentTable({ refreshTrigger }) {
         </>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/DocumentTable.jsx
 git commit -m "feat(knowledge): add DocumentTable with status polling and detail modal trigger"
-```
+'''
 
 ---
 
 ## Task 13: Rewrite DocumentsPage.jsx
 
 **Files:**
-- Modify: `src/pages/DocumentsPage.jsx`
+- Modify: 'src/pages/DocumentsPage.jsx'
 
 - [ ] **Step 1: Replace the file**
 
-```jsx
+'''jsx
 // src/pages/DocumentsPage.jsx
 import { useState } from 'react';
 import DocumentUploadZone from '../components/DocumentUploadZone';
@@ -1558,15 +1558,15 @@ export default function DocumentsPage() {
         </div>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Start the dev server and verify the page loads**
 
-```bash
+'''bash
 npm run dev
-```
+'''
 
-Open `http://localhost:5173/documents` — expect:
+Open 'http://localhost:5173/documents' — expect:
 - Upload zone with drag & drop area
 - Empty documents table
 - No console errors
@@ -1575,13 +1575,13 @@ Open `http://localhost:5173/documents` — expect:
 
 1. Drag a PDF onto the upload zone
 2. Progress bar shows 0 → 100%
-3. Table refreshes and shows the document with `embeddingStatus: pending` → `processing` → `completed`
+3. Table refreshes and shows the document with 'embeddingStatus: pending' → 'processing' → 'completed'
 4. Click "View" — modal opens with PDF viewer on the left and metadata on the right
 5. After a few seconds, the "About this document" section shows the AI summary
 
 - [ ] **Step 4: Commit**
 
-```bash
+'''bash
 git add src/pages/DocumentsPage.jsx
 git commit -m "feat(knowledge): rewrite DocumentsPage wiring upload zone and table together"
-```
+'''

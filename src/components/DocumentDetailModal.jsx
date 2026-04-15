@@ -1,10 +1,12 @@
-// src/components/ui/DocumentDetailModal.jsx
-import { useState, useEffect } from 'react';
-import { FiX, FiFileText, FiCalendar, FiBookOpen, FiDownload } from 'react-icons/fi';
-import documentService from '../../services/documentService';
+import { useState, useEffect, useCallback } from 'react';
+import { FiX, FiFileText, FiCalendar, FiBookOpen, FiDownload, FiZoomIn, FiZoomOut } from 'react-icons/fi';
+import documentService from '../services/documentService';
 import PDFViewer from './PDFViewer';
 import WordViewer from './WordViewer';
 import ExcelViewer from './ExcelViewer';
+import TextViewer from './TextViewer';
+import TSVViewer from './TSVViewer';
+import MarkdownViewer from './MarkdownViewer';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
 function formatDate(dateStr) {
@@ -16,10 +18,18 @@ function formatDate(dateStr) {
 export default function DocumentDetailModal({ document, onClose }) {
     const [fileUrl, setFileUrl] = useState(null);
     const [fileError, setFileError] = useState(null);
+    const [scale, setScale] = useState(1.0);
+
+    const zoomIn  = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
+    const zoomOut = useCallback(() => setScale(s => Math.max(0.2, parseFloat((s - 0.1).toFixed(1)))), []);
+
     const fileType = document.fileType;
-    const isPdf = fileType === 'pdf';
-    const isWord = fileType === 'docx' || fileType === 'doc';
-    const isExcel = fileType === 'xlsx' || fileType === 'xls';
+    const isPdf     = fileType === 'pdf';
+    const isWord     = fileType === 'docx' || fileType === 'doc';
+    const isExcel    = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
+    const isText     = fileType === 'txt';
+    const isTsv      = fileType === 'tsv';
+    const isMarkdown = fileType === 'md';
 
     useEffect(() => {
         let objectUrl = null;
@@ -36,16 +46,39 @@ export default function DocumentDetailModal({ document, onClose }) {
     }, [document.id]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-xl shadow-2xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+        <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 pl-64"
+            onClick={onClose}
+            style={{ marginTop: '0px' }}
+        >
+            <div 
+                className="bg-white rounded-xl shadow-2xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border-color">
                     <h2 className="text-lg font-semibold">Document Preview</h2>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded hover:bg-gray-100 transition-colors"
-                    >
-                        <FiX size={20} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        {isPdf && (
+                            <>
+                                <button onClick={zoomOut} className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-gray-100 rounded-md transition-colors" title="Zoom out (Ctrl+Scroll)">
+                                    <FiZoomOut size={16} />
+                                </button>
+                                <span className="text-xs font-medium text-text-secondary w-10 text-center tabular-nums">
+                                    {Math.round(scale * 100)}%
+                                </span>
+                                <button onClick={zoomIn} className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-gray-100 rounded-md transition-colors" title="Zoom in (Ctrl+Scroll)">
+                                    <FiZoomIn size={16} />
+                                </button>
+                                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                            </>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded hover:bg-gray-100 transition-colors"
+                        >
+                            <FiX size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
@@ -54,16 +87,18 @@ export default function DocumentDetailModal({ document, onClose }) {
                             <div className="flex items-center justify-center h-full text-sm text-red-500">
                                 {fileError}
                             </div>
-                        ) : !fileUrl ? (
-                            <div className="flex items-center justify-center h-full text-sm text-gray-400">
-                                Loading document...
-                            </div>
                         ) : isPdf ? (
-                            <PDFViewer fileUrl={fileUrl} />
+                            <PDFViewer fileUrl={fileUrl} scale={scale} onScaleChange={setScale} />
                         ) : isWord ? (
                             <WordViewer fileUrl={fileUrl} />
                         ) : isExcel ? (
                             <ExcelViewer fileUrl={fileUrl} />
+                        ) : isText ? (
+                            <TextViewer fileUrl={fileUrl} />
+                        ) : isTsv ? (
+                            <TSVViewer fileUrl={fileUrl} />
+                        ) : isMarkdown ? (
+                            <MarkdownViewer fileUrl={fileUrl} />
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full gap-4">
                                 <FiFileText size={48} className="text-gray-300" />

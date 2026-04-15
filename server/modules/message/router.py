@@ -18,10 +18,13 @@ CLASSIFY_PROMPT = [
         "content": (
             "You are a message router. Classify the user message as either AGENT or CHAT.\n"
             "Reply with exactly one word: AGENT or CHAT.\n\n"
-            "AGENT — the message requires multi-step work: research, planning, code generation, "
-            "testing, analysis, or any task that benefits from structured agent workflow.\n"
-            "CHAT — simple questions, greetings, explanations, translations, or quick answers "
-            "that can be handled by a single LLM response."
+            "AGENT — the message requires multi-step autonomous work that cannot be answered "
+            "in one pass: internet research, writing & executing code, creating a structured plan "
+            "across multiple steps, or running tests.\n"
+            "CHAT — everything else: questions about specific documents or data the user provides, "
+            "simple factual questions, greetings, explanations, summaries, translations, or any "
+            "query that can be answered with a single LLM response.\n\n"
+            "When in doubt, prefer CHAT."
         ),
     },
 ]
@@ -81,7 +84,12 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
-        route = await classifyMessage(data.message)
+        # If documents are attached, always use RAG — skip agent classification
+        if data.documentIds and len(data.documentIds) > 0:
+            logger.info(f"[Step 2] documentIds present → forcing CHAT/RAG path.")
+            route = "CHAT"
+        else:
+            route = await classifyMessage(data.message)
 
         if route == "AGENT":
             logger.info(f"[Step 3] Dispatching Agent Task for: '{data.message[:30]}...'")
@@ -101,14 +109,23 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
 
         async def eventGenerator():
             fullResponse = ""
+            sources = []
             try:
                 async for chunk in messageService.processMessageFlow(
                     str(user['id']),
                     data.conversationId,
                     data.message,
-                    data.projectId
+                    data.projectId,
+                    data.documentIds,
                 ):
-                    if "__QUOTA__" in chunk:
+                    if "__SOURCES__" in chunk:
+                        start = chunk.index("__SOURCES__") + len("__SOURCES__")
+                        end = chunk.index("__SOURCES__", start)
+                        try:
+                            sources = json.loads(chunk[start:end])
+                        except Exception:
+                            pass
+                    elif "__QUOTA__" in chunk:
                         start = chunk.index("__QUOTA__") + len("__QUOTA__")
                         end = chunk.index("__QUOTA__", start)
                         quotaJson = chunk[start:end]
@@ -116,7 +133,7 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
                         if cleanChunk:
                             fullResponse += cleanChunk
                             yield f"data: {json.dumps({'chunk': cleanChunk})}\n\n"
-                        yield f"data: {json.dumps({'done': True, 'fullResponse': fullResponse, 'quota': json.loads(quotaJson)})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'fullResponse': fullResponse, 'quota': json.loads(quotaJson), 'sources': sources})}\n\n"
                     else:
                         fullResponse += chunk
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"

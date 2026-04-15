@@ -19,7 +19,25 @@
       "Bash(.venv/Scripts/python -c \"import inspect; from lightrag import LightRAG; sig = inspect.signature\\(LightRAG.__init__\\); print\\([p for p in sig.parameters]\\)\")",
       "WebFetch(domain:github.com)",
       "WebSearch",
-      "Bash(find /d/Work/VTC_Telecom/AI_Tutor/ai-tutor-web -name *agentTask* -o -name *agentRun*)"
+      "Bash(find /d/Work/VTC_Telecom/AI_Tutor/ai-tutor-web -name *agentTask* -o -name *agentRun*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(curl -s http://localhost:3001/api/v1/health)",
+      "Bash(docker rm:*)",
+      "Bash(git add:*)",
+      "Bash(curl -I http://localhost:8080/)",
+      "Bash(docker compose:*)",
+      "Bash(.venv/Scripts/python.exe -c \"import yaml; yaml.safe_load\\(open\\(''.github/workflows/ci-cd.yml''\\)\\)\")",
+      "Bash(chmod +x deploy/bootstrap.sh)",
+      "Bash(git update-index:*)",
+      "Bash(/tmp/gh/bin/gh pr:*)",
+      "Bash(curl -s http://localhost:5173/login)",
+      "Bash(wmic process:*)",
+      "Bash(tasklist /fi \"pid eq 36020\" /v /fo list)",
+      "Bash(powershell -Command \"Get-Process -Id 36020 | Select-Object Id,ProcessName,Path | Format-List\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter ''ProcessId=36020'' | Select-Object CommandLine | Format-List\")"
     ]
   }
 }

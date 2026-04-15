@@ -28,13 +28,15 @@ class OllamaEmbeddingProvider:
     """Calls Ollama /api/embed endpoint (supports bge-m3, nomic-embed-text, etc.)."""
 
     def __init__(self, baseUrl: str = None, model: str = None, dim: int = 1024):
-        self._baseUrl = (baseUrl or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
+        raw = baseUrl or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        # Strip /v1 suffix — Ollama's /api/embed is at the root, not under /v1
+        self._baseUrl = raw.rstrip("/").removesuffix("/v1")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     f"{self._baseUrl}/api/embed",
                     json={"model": self._model, "input": texts},
@@ -43,7 +45,7 @@ class OllamaEmbeddingProvider:
                 data = resp.json()
                 return data.get("embeddings", [])
         except Exception as e:
-            logger.error(f"OllamaEmbeddingProvider.embed failed model={self._model}: {e}")
+            logger.error(f"OllamaEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
@@ -69,7 +71,7 @@ class OpenAIEmbeddingProvider:
             resp = await self._client.embeddings.create(model=self._model, input=texts)
             return [item.embedding for item in resp.data]
         except Exception as e:
-            logger.error(f"OpenAIEmbeddingProvider.embed failed model={self._model}: {e}")
+            logger.error(f"OpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
@@ -96,7 +98,7 @@ class GenericOpenAIEmbeddingProvider:
             resp = await self._client.embeddings.create(model=self._model, input=texts)
             return [item.embedding for item in resp.data]
         except Exception as e:
-            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed model={self._model}: {e}")
+            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
@@ -143,11 +145,16 @@ class EmbeddingService:
             return results[0]
         return [0.0] * self._dim
 
-    async def embedBatch(self, texts: List[str]) -> List[List[float]]:
-        """Embed multiple texts in one call."""
+    async def embedBatch(self, texts: List[str], batchSize: int = 32) -> List[List[float]]:
+        """Embed multiple texts, splitting into batches to avoid large payloads."""
         if not texts:
             return []
-        return await self._provider.embed(texts)
+        results = []
+        for i in range(0, len(texts), batchSize):
+            batch = texts[i:i + batchSize]
+            vectors = await self._provider.embed(batch)
+            results.extend(vectors)
+        return results
 
 
 embeddingService = EmbeddingService()
