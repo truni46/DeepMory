@@ -30,6 +30,12 @@ server/data/*.json
 # Build files
 *.tsbuildinfo
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # Testing files
 server/testing/*
 
