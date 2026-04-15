@@ -82,30 +82,26 @@
   }
 }
 
-/* Typing indicator animation */
-@keyframes typing-dot {
-
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.4;
-  }
-
-  50% {
-    transform: translateY(-8px);
-    opacity: 1;
-  }
+/* Thinking wipe animation */
+@keyframes thinking-wipe {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
 
-.typing-dot {
-  animation: typing-dot 1.4s infinite;
-  @apply bg-primary;
-}
-
-.typing-dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-dot:nth-child(3) {
-  animation-delay: 0.4s;
+.thinking-text {
+  background: linear-gradient(
+    90deg,
+    #9ca3af 0%,
+    #9ca3af 20%,
+    #007E6E 42%,
+    #4ade80 50%,
+    #007E6E 58%,
+    #9ca3af 80%,
+    #9ca3af 100%
+  );
+  background-size: 250% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-wipe 1.8s linear infinite;
 }

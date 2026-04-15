@@ -140,7 +140,7 @@ Respond in pure JSON format: {"facts": ["fact 1", "fact 2", ...]} or {"facts": [
             content = resp.content if hasattr(resp, "content") else str(resp)
             
             # Clean possible markdown JSON ticks
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = content.replace("'''json", "").replace("'''", "").strip()
             data = json.loads(content)
             
             if isinstance(data, dict):
@@ -173,7 +173,7 @@ Response must be pure JSON: {{"action": "ADD|UPDATE|DELETE|NONE", "memoryId": "<
         try:
             resp = await llmProvider.generateResponse([{"role": "user", "content": prompt}], stream=False)
             content = resp.content if hasattr(resp, "content") else str(resp)
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = content.replace("'''json", "").replace("'''", "").strip()
             return json.loads(content)
         except Exception as e:
             logger.error(f"AgentMemory._dedupDecision LLM failure: {e}")

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
@@ -9,15 +9,21 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { login, register } = useAuth();
+    const { login, register, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!isLoading && isAuthenticated) {
+            navigate('/', { replace: true });
+        }
+    }, [isAuthenticated, isLoading, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        setIsLoading(true);
+        setIsSubmitting(true);
 
         try {
             if (isLogin) {
@@ -29,7 +35,7 @@ export default function LoginPage() {
         } catch (err) {
             setError(err.message || 'Authentication failed. Please check your credentials.');
         } finally {
-            setIsLoading(false);
+            setIsSubmitting(false);
         }
     };
 
@@ -98,10 +104,10 @@ export default function LoginPage() {
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isSubmitting}
                             className="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-lg transition-colors mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isLoading ? (
+                            {isSubmitting ? (
                                 <span className="flex items-center justify-center">
                                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

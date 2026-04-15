@@ -1,6 +1,6 @@
 # Token Quota Management Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox ('- [ ]') syntax for tracking.
 
 **Goal:** Add token-based quota management with Redis real-time tracking, LLM usage extraction, and a collapsible frontend widget.
 
@@ -13,32 +13,32 @@
 ### File Structure
 
 **New files:**
-- `server/config/quota.py` — env-based quota config singleton
-- `server/modules/quota/repository.py` — Redis operations + DB rebuild
-- `server/modules/quota/service.py` — quota check/increment/status logic
-- `server/modules/quota/router.py` — GET /quota/status endpoint
-- `src/components/ui/QuotaWidget.jsx` — collapsible quota display widget
+- 'server/config/quota.py' — env-based quota config singleton
+- 'server/modules/quota/repository.py' — Redis operations + DB rebuild
+- 'server/modules/quota/service.py' — quota check/increment/status logic
+- 'server/modules/quota/router.py' — GET /quota/status endpoint
+- 'src/components/ui/QuotaWidget.jsx' — collapsible quota display widget
 
 **Modified files:**
-- `server/modules/llm/llmProvider.py` — extract usage from API responses
-- `server/modules/message/service.py` — integrate usage extraction + quota calls
-- `server/modules/message/router.py` — add quota check + SSE quota event
-- `server/modules/message/repository.py` — store extended usage metadata
-- `server/apiRouter.py` — register quota router
-- `src/services/streamingService.js` — handle quota SSE events
-- `src/pages/ChatPage.jsx` — add QuotaWidget + quota state + block UI
-- `src/components/ChatInput.jsx` — accept quotaBlocked prop
+- 'server/modules/llm/llmProvider.py' — extract usage from API responses
+- 'server/modules/message/service.py' — integrate usage extraction + quota calls
+- 'server/modules/message/router.py' — add quota check + SSE quota event
+- 'server/modules/message/repository.py' — store extended usage metadata
+- 'server/apiRouter.py' — register quota router
+- 'src/services/streamingService.js' — handle quota SSE events
+- 'src/pages/ChatPage.jsx' — add QuotaWidget + quota state + block UI
+- 'src/components/ChatInput.jsx' — accept quotaBlocked prop
 
 ---
 
-### Task 1: Quota Config (`server/config/quota.py`)
+### Task 1: Quota Config ('server/config/quota.py')
 
 **Files:**
-- Create: `server/config/quota.py`
+- Create: 'server/config/quota.py'
 
 - [ ] **Step 1: Create quota config module**
 
-```python
+'''python
 import os
 
 class QuotaConfig:
@@ -49,25 +49,25 @@ class QuotaConfig:
         self.warningThreshold = float(os.getenv("TOKEN_WARNING_THRESHOLD", 0.9))
 
 quotaConfig = QuotaConfig()
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/config/quota.py
 git commit -m "feat(quota): add env-based quota config"
-```
+'''
 
 ---
 
-### Task 2: Quota Repository (`server/modules/quota/repository.py`)
+### Task 2: Quota Repository ('server/modules/quota/repository.py')
 
 **Files:**
-- Create: `server/modules/quota/repository.py`
+- Create: 'server/modules/quota/repository.py'
 
 - [ ] **Step 1: Create quota repository with Redis ops + DB rebuild**
 
-```python
+'''python
 from datetime import datetime, timedelta
 from typing import Optional
 from config.logger import logger
@@ -184,25 +184,25 @@ class QuotaRepository:
 
 
 quotaRepository = QuotaRepository()
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/modules/quota/repository.py
 git commit -m "feat(quota): add quota repository with Redis ops and DB rebuild"
-```
+'''
 
 ---
 
-### Task 3: Quota Service (`server/modules/quota/service.py`)
+### Task 3: Quota Service ('server/modules/quota/service.py')
 
 **Files:**
-- Create: `server/modules/quota/service.py`
+- Create: 'server/modules/quota/service.py'
 
 - [ ] **Step 1: Create quota service**
 
-```python
+'''python
 from typing import Dict
 from config.quota import quotaConfig
 from config.logger import logger
@@ -257,26 +257,26 @@ class QuotaService:
 
 
 quotaService = QuotaService()
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/modules/quota/service.py
 git commit -m "feat(quota): add quota service with check, increment, status"
-```
+'''
 
 ---
 
-### Task 4: Quota Router (`server/modules/quota/router.py`)
+### Task 4: Quota Router ('server/modules/quota/router.py')
 
 **Files:**
-- Create: `server/modules/quota/router.py`
-- Modify: `server/apiRouter.py:1-22`
+- Create: 'server/modules/quota/router.py'
+- Modify: 'server/apiRouter.py:1-22'
 
 - [ ] **Step 1: Create quota router**
 
-```python
+'''python
 from fastapi import APIRouter, Depends, Query
 from typing import Dict
 from common.deps import getCurrentUser
@@ -297,41 +297,41 @@ async def getQuotaStatus(
     except Exception as e:
         logger.error(f"getQuotaStatus failed: {e}")
         raise
-```
+'''
 
 - [ ] **Step 2: Register quota router in apiRouter.py**
 
-Add these two lines to `server/apiRouter.py`:
+Add these two lines to 'server/apiRouter.py':
 
-```python
+'''python
 from modules.quota.router import router as quotaRouter
-```
+'''
 
-And at the bottom with the other `include_router` calls:
+And at the bottom with the other 'include_router' calls:
 
-```python
+'''python
 router.include_router(quotaRouter)
-```
+'''
 
 - [ ] **Step 3: Commit**
 
-```bash
+'''bash
 git add server/modules/quota/router.py server/apiRouter.py
 git commit -m "feat(quota): add quota REST endpoint and register router"
-```
+'''
 
 ---
 
-### Task 5: LLM Provider — Extract Usage Data (`server/modules/llm/llmProvider.py`)
+### Task 5: LLM Provider — Extract Usage Data ('server/modules/llm/llmProvider.py')
 
 **Files:**
-- Modify: `server/modules/llm/llmProvider.py`
+- Modify: 'server/modules/llm/llmProvider.py'
 
-- [ ] **Step 1: Add usage extraction to `BaseOpenAIProvider.generateResponse()`**
+- [ ] **Step 1: Add usage extraction to 'BaseOpenAIProvider.generateResponse()'**
 
-Replace lines 21-37 of `llmProvider.py` (the `generateResponse` method in `BaseOpenAIProvider`):
+Replace lines 21-37 of 'llmProvider.py' (the 'generateResponse' method in 'BaseOpenAIProvider'):
 
-```python
+'''python
     async def generateResponse(self, messages: List[Dict], stream: bool = False, tools: Optional[List[Dict]] = None):
         try:
             if stream:
@@ -359,13 +359,13 @@ Replace lines 21-37 of `llmProvider.py` (the `generateResponse` method in `BaseO
         except Exception as e:
             logger.error(f"LLM Provider ({self.model}) error: {e}")
             raise e
-```
+'''
 
-- [ ] **Step 2: Add usage extraction to `BaseOpenAIProvider.streamResponse()`**
+- [ ] **Step 2: Add usage extraction to 'BaseOpenAIProvider.streamResponse()'**
 
-Replace lines 39-58 (the `streamResponse` method):
+Replace lines 39-58 (the 'streamResponse' method):
 
-```python
+'''python
     async def streamResponse(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
         try:
             stream = await self.client.chat.completions.create(
@@ -396,13 +396,13 @@ Replace lines 39-58 (the `streamResponse` method):
         except Exception as e:
             logger.error(f"LLM Streaming error ({self.model}): {e}")
             raise e
-```
+'''
 
-- [ ] **Step 3: Add usage extraction to `GeminiNativeProvider.generateResponse()`**
+- [ ] **Step 3: Add usage extraction to 'GeminiNativeProvider.generateResponse()'**
 
-Replace lines 105-127 (the non-stream `generateResponse` in `GeminiNativeProvider`):
+Replace lines 105-127 (the non-stream 'generateResponse' in 'GeminiNativeProvider'):
 
-```python
+'''python
     async def generateResponse(self, messages: List[Dict], stream: bool = False):
         try:
             if stream:
@@ -437,13 +437,13 @@ Replace lines 105-127 (the non-stream `generateResponse` in `GeminiNativeProvide
         except Exception as e:
             logger.error(f"LLM Provider ({self.model}) error: {e}")
             raise e
-```
+'''
 
-- [ ] **Step 4: Add usage extraction to `GeminiNativeProvider.streamResponse()`**
+- [ ] **Step 4: Add usage extraction to 'GeminiNativeProvider.streamResponse()'**
 
-Replace lines 129-158 (the `streamResponse` in `GeminiNativeProvider`):
+Replace lines 129-158 (the 'streamResponse' in 'GeminiNativeProvider'):
 
-```python
+'''python
     async def streamResponse(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
         import httpx
         import json
@@ -484,13 +484,13 @@ Replace lines 129-158 (the `streamResponse` in `GeminiNativeProvider`):
         except Exception as e:
             logger.error(f"LLM Streaming error ({self.model}): {e}")
             raise e
-```
+'''
 
-- [ ] **Step 5: Update `MockProvider.generateResponse()` to return tuple**
+- [ ] **Step 5: Update 'MockProvider.generateResponse()' to return tuple**
 
 Replace lines 171-180:
 
-```python
+'''python
     async def generateResponse(self, messages: List[Dict], stream: bool = False):
         mockText = "This is a mock response. Please configure a valid LLM_PROVIDER in settings."
         if stream:
@@ -501,38 +501,38 @@ Replace lines 171-180:
                     await asyncio.sleep(0.05)
             return generator()
         return mockText, None
-```
+'''
 
-- [ ] **Step 6: Add `json` import at top of file**
+- [ ] **Step 6: Add 'json' import at top of file**
 
-Add `import json` to the imports at the top of `llmProvider.py` (line 1-5 area).
+Add 'import json' to the imports at the top of 'llmProvider.py' (line 1-5 area).
 
 - [ ] **Step 7: Commit**
 
-```bash
+'''bash
 git add server/modules/llm/llmProvider.py
 git commit -m "feat(quota): extract usage data from LLM provider responses"
-```
+'''
 
 ---
 
-### Task 6: Message Service — Usage Extraction + Quota Integration (`server/modules/message/service.py`)
+### Task 6: Message Service — Usage Extraction + Quota Integration ('server/modules/message/service.py')
 
 **Files:**
-- Modify: `server/modules/message/service.py`
+- Modify: 'server/modules/message/service.py'
 
 - [ ] **Step 1: Add imports and usage parsing helper**
 
 Add to the imports section (after line 13):
 
-```python
+'''python
 from modules.quota.service import quotaService
 from modules.memory.shortTerm.contextWindowManager import contextWindowManager
-```
+'''
 
-Add a helper method to the `MessageService` class (after the `validateMessage` method, line 26):
+Add a helper method to the 'MessageService' class (after the 'validateMessage' method, line 26):
 
-```python
+'''python
     @staticmethod
     def parseUsageFromStream(chunk: str):
         if "__USAGE__" in chunk:
@@ -554,13 +554,13 @@ Add a helper method to the `MessageService` class (after the `validateMessage` m
             "totalTokens": tokens,
             "source": "tiktoken_fallback",
         }
-```
+'''
 
-- [ ] **Step 2: Update `processMessageFlow` to capture usage and integrate quota**
+- [ ] **Step 2: Update 'processMessageFlow' to capture usage and integrate quota**
 
-Replace the `processMessageFlow` method (lines 31-102):
+Replace the 'processMessageFlow' method (lines 31-102):
 
-```python
+'''python
     async def processMessageFlow(
         self,
         userId: str,
@@ -642,33 +642,33 @@ Replace the `processMessageFlow` method (lines 31-102):
             asyncio.create_task(
                 self.generateConversationTitle(conversationId, userId, content, fullResponse)
             )
-```
+'''
 
 - [ ] **Step 3: Commit**
 
-```bash
+'''bash
 git add server/modules/message/service.py
 git commit -m "feat(quota): integrate usage extraction and quota tracking in message flow"
-```
+'''
 
 ---
 
-### Task 7: Message Router — Quota Check + SSE Quota Event (`server/modules/message/router.py`)
+### Task 7: Message Router — Quota Check + SSE Quota Event ('server/modules/message/router.py')
 
 **Files:**
-- Modify: `server/modules/message/router.py`
+- Modify: 'server/modules/message/router.py'
 
-- [ ] **Step 1: Add quota import and update `sendMessageStream`**
+- [ ] **Step 1: Add quota import and update 'sendMessageStream'**
 
 Add import at top (after line 9):
 
-```python
+'''python
 from modules.quota.service import quotaService
-```
+'''
 
-Replace the `sendMessageStream` function (lines 49-115) — add quota check before LLM call and parse quota event from stream:
+Replace the 'sendMessageStream' function (lines 49-115) — add quota check before LLM call and parse quota event from stream:
 
-```python
+'''python
 @router.post("/chat/completions")
 async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurrentUser)):
     try:
@@ -754,55 +754,55 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
     except Exception as e:
         logger.error(f"Error streaming message: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/modules/message/router.py
 git commit -m "feat(quota): add quota check and SSE quota event in message router"
-```
+'''
 
 ---
 
-### Task 8: Register Quota Router (`server/apiRouter.py`)
+### Task 8: Register Quota Router ('server/apiRouter.py')
 
 **Files:**
-- Modify: `server/apiRouter.py`
+- Modify: 'server/apiRouter.py'
 
 - [ ] **Step 1: Add quota router import and registration**
 
 Add import line after line 10:
 
-```python
+'''python
 from modules.quota.router import router as quotaRouter
-```
+'''
 
 Add registration after line 22:
 
-```python
+'''python
 router.include_router(quotaRouter)
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/apiRouter.py
 git commit -m "feat(quota): register quota router in API"
-```
+'''
 
 ---
 
-### Task 9: Frontend StreamingService — Handle Quota Events (`src/services/streamingService.js`)
+### Task 9: Frontend StreamingService — Handle Quota Events ('src/services/streamingService.js')
 
 **Files:**
-- Modify: `src/services/streamingService.js`
+- Modify: 'src/services/streamingService.js'
 
-- [ ] **Step 1: Add `onQuota` callback and `quotaExceeded` handling**
+- [ ] **Step 1: Add 'onQuota' callback and 'quotaExceeded' handling**
 
-Replace the `sendMessage` method signature and SSE parsing logic. The new method:
+Replace the 'sendMessage' method signature and SSE parsing logic. The new method:
 
-```javascript
+'''javascript
     async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota) {
         try {
             const token = localStorage.getItem('accessToken');
@@ -810,17 +810,17 @@ Replace the `sendMessage` method signature and SSE parsing logic. The new method
                 'Content-Type': 'application/json',
             };
             if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+                headers['Authorization'] = 'Bearer ${token}';
             }
 
-            const response = await fetch(`${API_BASE_URL}/messages/chat/completions`, {
+            const response = await fetch('${API_BASE_URL}/messages/chat/completions', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ message, conversationId }),
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error('HTTP ${response.status}');
             }
 
             const reader = response.body.getReader();
@@ -880,30 +880,30 @@ Replace the `sendMessage` method signature and SSE parsing logic. The new method
             onError(error);
         }
     }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/services/streamingService.js
 git commit -m "feat(quota): handle quota events in streaming service"
-```
+'''
 
 ---
 
-### Task 10: QuotaWidget Component (`src/components/ui/QuotaWidget.jsx`)
+### Task 10: QuotaWidget Component ('src/components/ui/QuotaWidget.jsx')
 
 **Files:**
-- Create: `src/components/ui/QuotaWidget.jsx`
+- Create: 'src/components/ui/QuotaWidget.jsx'
 
 - [ ] **Step 1: Create QuotaWidget component**
 
-```jsx
+'''jsx
 import { useState, useRef, useEffect } from 'react';
 
 function formatTokens(n) {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    if (n >= 1_000_000) return '${(n / 1_000_000).toFixed(1)}M';
+    if (n >= 1_000) return '${(n / 1_000).toFixed(0)}k';
     return String(n);
 }
 
@@ -911,8 +911,8 @@ function formatTime(seconds) {
     if (seconds <= 0) return '0m';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+    if (h > 0) return '${h}h ${m}m';
+    return '${m}m';
 }
 
 function getColor(percent) {
@@ -927,14 +927,14 @@ function ProgressBar({ label, used, limit, percent, extra }) {
         <div className="mb-3 last:mb-0">
             <div className="flex justify-between text-xs mb-1">
                 <span className="font-medium text-text-primary">{label}</span>
-                <span className={`font-semibold ${color.text}`}>
+                <span className={'font-semibold ${color.text}'}>
                     {formatTokens(used)} / {formatTokens(limit)}
                 </span>
             </div>
             <div className="w-full h-2 bg-bg-secondary rounded-full overflow-hidden">
                 <div
-                    className={`h-full rounded-full transition-all duration-500 ${color.bg}`}
-                    style={{ width: `${Math.min(percent * 100, 100)}%` }}
+                    className={'h-full rounded-full transition-all duration-500 ${color.bg}'}
+                    style={{ width: '${Math.min(percent * 100, 100)}%' }}
                 />
             </div>
             {extra && (
@@ -985,21 +985,21 @@ export default function QuotaWidget({ quota, warning }) {
                         used={quota.session?.used || 0}
                         limit={quota.session?.limit || 1}
                         percent={quota.session?.percent || 0}
-                        extra={`${formatTime(quota.session?.remainingSeconds || 0)} remaining`}
+                        extra={'${formatTime(quota.session?.remainingSeconds || 0)} remaining'}
                     />
                     <ProgressBar
                         label="Weekly"
                         used={quota.weekly?.used || 0}
                         limit={quota.weekly?.limit || 1}
                         percent={quota.weekly?.percent || 0}
-                        extra={`Resets ${quota.weekly?.resetDay || 'Mon'}`}
+                        extra={'Resets ${quota.weekly?.resetDay || 'Mon'}'}
                     />
                 </div>
             )}
 
             <button
                 onClick={() => setExpanded(!expanded)}
-                className={`ml-auto flex items-center justify-center w-10 h-10 rounded-full shadow-lg border-2 border-white transition-all duration-300 ${color.bg} ${warning ? 'animate-pulse' : ''} hover:scale-110`}
+                className={'ml-auto flex items-center justify-center w-10 h-10 rounded-full shadow-lg border-2 border-white transition-all duration-300 ${color.bg} ${warning ? 'animate-pulse' : ''} hover:scale-110'}
                 title="Token quota"
             >
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1009,47 +1009,47 @@ export default function QuotaWidget({ quota, warning }) {
         </div>
     );
 }
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add src/components/ui/QuotaWidget.jsx
 git commit -m "feat(quota): add collapsible QuotaWidget component"
-```
+'''
 
 ---
 
-### Task 11: ChatPage — Integrate QuotaWidget + Block UI (`src/pages/ChatPage.jsx`)
+### Task 11: ChatPage — Integrate QuotaWidget + Block UI ('src/pages/ChatPage.jsx')
 
 **Files:**
-- Modify: `src/pages/ChatPage.jsx`
-- Modify: `src/components/ChatInput.jsx`
+- Modify: 'src/pages/ChatPage.jsx'
+- Modify: 'src/components/ChatInput.jsx'
 
 - [ ] **Step 1: Add quota state and fetch to ChatPage**
 
-Add import at top of `ChatPage.jsx` (after line 12):
+Add import at top of 'ChatPage.jsx' (after line 12):
 
-```javascript
+'''javascript
 import QuotaWidget from '../components/ui/QuotaWidget';
 import apiService from '../services/apiService';
-```
+'''
 
-Add quota state after line 30 (after `calledAgent` state):
+Add quota state after line 30 (after 'calledAgent' state):
 
-```javascript
+'''javascript
     const [quotaStatus, setQuotaStatus] = useState(null);
     const [quotaWarning, setQuotaWarning] = useState(false);
     const [quotaBlocked, setQuotaBlocked] = useState(false);
-```
+'''
 
-Add effect to fetch quota on mount/conversation change (after the `activeConversationId` useEffect, around line 66):
+Add effect to fetch quota on mount/conversation change (after the 'activeConversationId' useEffect, around line 66):
 
-```javascript
+'''javascript
     useEffect(() => {
         const fetchQuota = async () => {
             try {
-                const status = await apiService.get(`/quota/status?conversationId=${activeConversationId || ''}`);
+                const status = await apiService.get('/quota/status?conversationId=${activeConversationId || ''}');
                 setQuotaStatus(status);
                 setQuotaBlocked(!status.allowed);
                 setQuotaWarning(status.warning);
@@ -1059,13 +1059,13 @@ Add effect to fetch quota on mount/conversation change (after the `activeConvers
         };
         fetchQuota();
     }, [activeConversationId]);
-```
+'''
 
 - [ ] **Step 2: Add onQuota callback in handleSendMessage**
 
-In the `handleSendMessage` function, add an `onQuota` handler to the `streamingService.sendMessage` call. Replace lines 265-291:
+In the 'handleSendMessage' function, add an 'onQuota' handler to the 'streamingService.sendMessage' call. Replace lines 265-291:
 
-```javascript
+'''javascript
             await streamingService.sendMessage(
                 messageText,
                 currentId,
@@ -1101,33 +1101,33 @@ In the `handleSendMessage` function, add an `onQuota` handler to the `streamingS
                     }
                 }
             );
-```
+'''
 
 - [ ] **Step 3: Add QuotaWidget and blocked overlay to JSX**
 
-In the return JSX, add before the closing `</div>` (before line 366):
+In the return JSX, add before the closing '</div>' (before line 366):
 
-```jsx
+'''jsx
             <QuotaWidget quota={quotaStatus} warning={quotaWarning} />
-```
+'''
 
-Update the ChatInput line (line 364) to pass `quotaBlocked`:
+Update the ChatInput line (line 364) to pass 'quotaBlocked':
 
-```jsx
+'''jsx
             <ChatInput onSend={handleSendMessage} disabled={isTyping || quotaBlocked} quotaBlocked={quotaBlocked} />
-```
+'''
 
 - [ ] **Step 4: Update ChatInput to show blocked message**
 
-In `src/components/ChatInput.jsx`, update the component signature (line 39):
+In 'src/components/ChatInput.jsx', update the component signature (line 39):
 
-```jsx
+'''jsx
 export default function ChatInput({ onSend, disabled = false, quotaBlocked = false }) {
-```
+'''
 
-Add a blocked overlay inside the component return, after the `data-placeholder` div and before the send button (after line 202):
+Add a blocked overlay inside the component return, after the 'data-placeholder' div and before the send button (after line 202):
 
-```jsx
+'''jsx
                     {quotaBlocked && (
                         <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
                             <span className="text-sm text-red-600 font-medium">
@@ -1135,46 +1135,46 @@ Add a blocked overlay inside the component return, after the `data-placeholder` 
                             </span>
                         </div>
                     )}
-```
+'''
 
-Update the wrapper div (line 170) to add `relative`:
+Update the wrapper div (line 170) to add 'relative':
 
-```jsx
+'''jsx
                 <div className="relative flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
-```
+'''
 
 - [ ] **Step 5: Commit**
 
-```bash
+'''bash
 git add src/pages/ChatPage.jsx src/components/ChatInput.jsx
 git commit -m "feat(quota): integrate QuotaWidget and block UI in ChatPage"
-```
+'''
 
 ---
 
-### Task 12: Add Environment Variables to `.env.example`
+### Task 12: Add Environment Variables to '.env.example'
 
 **Files:**
-- Modify: `server/.env.example` (or `.env.example` at root)
+- Modify: 'server/.env.example' (or '.env.example' at root)
 
 - [ ] **Step 1: Add quota env vars**
 
-Add this section to the `.env.example` file:
+Add this section to the '.env.example' file:
 
-```env
+'''env
 # Token Quota
 TOKEN_SESSION_LIMIT=500000
 TOKEN_SESSION_DURATION=7200
 TOKEN_WEEKLY_LIMIT=5000000
 TOKEN_WARNING_THRESHOLD=0.9
-```
+'''
 
 - [ ] **Step 2: Commit**
 
-```bash
+'''bash
 git add server/.env.example
 git commit -m "feat(quota): add token quota env vars to .env.example"
-```
+'''
 
 ---
 
@@ -1182,35 +1182,35 @@ git commit -m "feat(quota): add token quota env vars to .env.example"
 
 - [ ] **Step 1: Start backend and verify quota endpoint**
 
-```bash
+'''bash
 cd server && source ../.venv/Scripts/activate && python main.py
-```
+'''
 
 Test the quota endpoint:
-```bash
+'''bash
 curl -H "Authorization: Bearer <token>" "http://localhost:3000/api/v1/quota/status?conversationId=test"
-```
+'''
 
-Expected: JSON with `allowed`, `session`, `weekly`, `warning` fields.
+Expected: JSON with 'allowed', 'session', 'weekly', 'warning' fields.
 
 - [ ] **Step 2: Send a chat message and verify quota SSE event**
 
 Send a message via the frontend. Check:
-- Stream response includes quota data in the `done` event
+- Stream response includes quota data in the 'done' event
 - QuotaWidget appears at bottom-right
 - Clicking widget shows session + weekly progress bars
-- Console logs show `[TOKEN_SOURCE: api_usage]` or `[TOKEN_SOURCE: tiktoken_fallback]`
+- Console logs show '[TOKEN_SOURCE: api_usage]' or '[TOKEN_SOURCE: tiktoken_fallback]'
 
 - [ ] **Step 3: Verify quota enforcement**
 
-Set `TOKEN_SESSION_LIMIT=100` temporarily in `.env` and restart server. Send a message. After the limit is reached:
-- Next message should return `quotaExceeded: true`
+Set 'TOKEN_SESSION_LIMIT=100' temporarily in '.env' and restart server. Send a message. After the limit is reached:
+- Next message should return 'quotaExceeded: true'
 - ChatInput should be disabled with "Quota exceeded" overlay
 - QuotaWidget should auto-expand with red progress bars
 
 - [ ] **Step 4: Final commit**
 
-```bash
+'''bash
 git add -A
 git commit -m "feat(quota): token quota management system complete"
-```
+'''

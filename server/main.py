@@ -2,8 +2,19 @@ import os
 from dotenv import load_dotenv
 
 # MUST load environment variables FIRST, before importing any internal modules
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=env_path)
+# Load order: .env (base) → .env.{APP_ENV} (override) → .env.local (personal override)
+rootDir = os.path.join(os.path.dirname(__file__), '..')
+
+load_dotenv(dotenv_path=os.path.join(rootDir, '.env'))
+
+appEnv = os.getenv('APP_ENV', 'local')
+envOverride = os.path.join(rootDir, f'.env.{appEnv}')
+if os.path.exists(envOverride):
+    load_dotenv(dotenv_path=envOverride, override=True)
+
+envLocal = os.path.join(rootDir, '.env.local')
+if os.path.exists(envLocal):
+    load_dotenv(dotenv_path=envLocal, override=True)
 
 import uvicorn
 import socketio
@@ -24,7 +35,7 @@ from websocket.handlers import sio
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
     # Startup
-    logger.info("Starting DeepMory Server...")
+    logger.info(f"Starting DeepMory Server... (APP_ENV={appEnv})")
     
     # Connect to database
     await db.connect()

@@ -1,16 +1,7 @@
-// src/components/ui/DocumentCard.jsx
+// src/components/DocumentCard.jsx
 import { FiTrash2 } from 'react-icons/fi';
 import DocumentStatusBadge from './DocumentStatusBadge';
-
-// const FILE_ICONS = {
-//     pdf:  '📄',
-//     docx: '📝',
-//     doc:  '📝',
-//     xlsx: '📊',
-//     xls:  '📊',
-//     txt:  '📃',
-//     md:   '📃',
-// };
+import { TableRow, TableCell } from './ui/Table';
 
 function formatFileSize(bytes) {
     if (!bytes) return '—';
@@ -20,19 +11,14 @@ function formatFileSize(bytes) {
 }
 
 export default function DocumentCard({ document, onView, onDelete }) {
-    // const icon = FILE_ICONS[document.fileType] || '📄';
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
     });
 
     return (
-        <tr
-            className="hover:bg-gray-50 transition-colors border-b border-border-color last:border-0 cursor-pointer"
-            onClick={() => onView(document)}
-        >
-            <td className="px-6 py-4">
+        <TableRow onClick={() => onView(document)}>
+            <TableCell>
                 <div className="flex items-center gap-3">
-                    {/* <span className="text-lg">{icon}</span> */}
                     <span
                         className="font-medium text-sm truncate max-w-xs"
                         title={document.filename}
@@ -40,18 +26,20 @@ export default function DocumentCard({ document, onView, onDelete }) {
                         {document.filename}
                     </span>
                 </div>
-            </td>
-            <td className="px-6 py-4 text-sm text-text-secondary uppercase">
+            </TableCell>
+            <TableCell className="text-sm text-text-secondary uppercase">
                 {document.fileType || '—'}
-            </td>
-            <td className="px-6 py-4 text-sm text-text-secondary">
+            </TableCell>
+            <TableCell className="text-sm text-text-secondary">
                 {formatFileSize(document.fileSize)}
-            </td>
-            <td className="px-6 py-4">
+            </TableCell>
+            <TableCell>
                 <DocumentStatusBadge status={document.embeddingStatus} />
-            </td>
-            <td className="px-6 py-4 text-sm text-text-secondary">{date}</td>
-            <td className="px-6 py-4">
+            </TableCell>
+            <TableCell className="text-sm text-text-secondary">
+                {date}
+            </TableCell>
+            <TableCell isLast>
                 <div className="flex items-center justify-end">
                     <button
                         onClick={e => { e.stopPropagation(); onDelete(document.id); }}
@@ -61,7 +49,7 @@ export default function DocumentCard({ document, onView, onDelete }) {
                         <FiTrash2 size={16} />
                     </button>
                 </div>
-            </td>
-        </tr>
+            </TableCell>
+        </TableRow>
     );
 }

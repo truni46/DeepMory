@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import apiService from '../services/apiService';
 
 const AuthContext = createContext(null);
@@ -7,6 +8,21 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const navigate = useNavigate();
+
+    const logout = useCallback(() => {
+        localStorage.removeItem('accessToken');
+        setUser(null);
+        setIsAuthenticated(false);
+        navigate('/login', { replace: true });
+    }, [navigate]);
+
+    // Listen for 401 events from apiService
+    useEffect(() => {
+        const handleUnauthorized = () => logout();
+        window.addEventListener('auth:unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    }, [logout]);
 
     // Check auth on mount
     useEffect(() => {
@@ -74,13 +90,6 @@ export const AuthProvider = ({ children }) => {
             console.error('Register error:', error);
             throw error;
         }
-    };
-
-    // Logout function
-    const logout = () => {
-        localStorage.removeItem('accessToken');
-        setUser(null);
-        setIsAuthenticated(false);
     };
 
     return (

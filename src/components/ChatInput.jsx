@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import DropdownMenu from './ui/DropdownMenu';
-import QuotaWidget from './ui/QuotaWidget';
+import QuotaWidget from './QuotaWidget';
+import DocumentPickerModal from './DocumentPickerModal';
 
 const SLASH_COMMANDS = [
     { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
@@ -37,11 +38,50 @@ function getSlashCommand(text) {
     return { resolved: found.command, raw: match[1] };
 }
 
-export default function ChatInput({ onSend, disabled = false, quotaBlocked = false, quota = null, quotaWarning = false }) {
+function getFileColorConfig(filename) {
+    const ext = filename?.split('.').pop().toLowerCase();
+    if (ext === 'doc' || ext === 'docx') return { bg: 'bg-blue-50 border-blue-100', icon: 'bg-[#0084FF]' };
+    if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return { bg: 'bg-green-50 border-green-200', icon: 'bg-green-500' };
+    if (ext === 'pdf') return { bg: 'bg-orange-50 border-orange-200', icon: 'bg-[#ff6b00]' };
+    return { bg: 'bg-gray-100 border-gray-200', icon: 'bg-gray-500' };
+}
+
+export default function ChatInput({
+    conversationId,
+    onSend,
+    disabled = false,
+    quotaBlocked = false,
+    quota = null,
+    quotaWarning = false,
+    selectedDocs = [],
+    onDocumentsConfirm,
+    onDocumentRemove,
+    isStreaming = false,
+    onStop,
+}) {
     const [message, setMessage] = useState('');
+    const draftsRef = useRef({});
+    const prevConvIdRef = useRef(conversationId);
+
+    useEffect(() => {
+        if (prevConvIdRef.current !== conversationId) {
+            draftsRef.current[prevConvIdRef.current] = message;
+            
+            const nextMessage = draftsRef.current[conversationId] || '';
+            setMessage(nextMessage);
+            
+            if (editorRef.current) {
+                editorRef.current.textContent = nextMessage;
+            }
+            
+            prevConvIdRef.current = conversationId;
+        }
+    }, [conversationId, message]);
+
     const [showCommands, setShowCommands] = useState(false);
     const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const [showDocPicker, setShowDocPicker] = useState(false);
     const editorRef = useRef(null);
     const isComposing = useRef(false);
 
@@ -71,7 +111,6 @@ export default function ChatInput({ onSend, disabled = false, quotaBlocked = fal
             const rest = message.slice(cmd.raw.length);
             const html = `<span class="slash-cmd" style="color:#007E6E;font-weight:600;">${cmd.raw}</span>${escapeHtml(rest)}`;
             if (el.innerHTML !== html) {
-                const sel = window.getSelection();
                 const offset = getCaretOffset(el);
                 el.innerHTML = html;
                 restoreCaret(el, offset);
@@ -169,78 +208,135 @@ export default function ChatInput({ onSend, disabled = false, quotaBlocked = fal
         <div className="bg-transparent p-4">
             <div className="max-w-3xl mx-auto">
                 <div className="flex items-end gap-2">
-                <div className="relative flex-1 flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
-                    <button
-                        className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
-                        title="Add documents"
-                    >
-                        <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
-
-                    <div className="flex-1 relative">
-                        <DropdownMenu
-                            items={filteredCommands}
-                            selectedIndex={selectedIndex}
-                            visible={showCommands}
-                            position="top"
-                            onSelect={(item) => selectCommand(item)}
-                            onHover={(index) => setSelectedIndex(index)}
-                        />
-
-                        <div
-                            ref={editorRef}
-                            contentEditable={!disabled}
-                            onInput={handleInput}
-                            onKeyDown={handleKeyDown}
-                            onPaste={handlePaste}
-                            onCompositionStart={() => { isComposing.current = true; }}
-                            onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
-                            data-placeholder="Ask a question..."
-                            className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto py-2 ml-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
-                            role="textbox"
-                            style={{ minHeight: '24px' }}
-                        />
-                    </div>
-
-                    {quotaBlocked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
-                            <span className="text-sm text-red-600 font-medium">
-                                Quota exceeded. Please wait for reset.
-                            </span>
-                        </div>
-                    )}
-
-                    <button
-                        onClick={handleSend}
-                        disabled={!message.trim() || disabled}
-                        className={`flex-shrink-0 p-2 rounded-full transition-all duration-200 ${message.trim() && !disabled
-                            ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
-                            : 'bg-transparent text-text-muted cursor-not-allowed'
-                            }`}
-                        title={message.trim() ? "Send message" : "Record audio"}
-                    >
-                        {message.trim() ? (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                            </svg>
-                        ) : (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
+                    <div className="relative flex-1 flex flex-col bg-white border border-border rounded-3xl shadow-lg transition-shadow hover:shadow-xl">
+                        
+                        {selectedDocs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-3 px-3 pb-1">
+                                {selectedDocs.map(doc => {
+                                    const colors = getFileColorConfig(doc.filename);
+                                    return (
+                                        <div
+                                            key={doc.id}
+                                            className={`group relative flex items-center gap-2 p-1.5 pr-3 border rounded-xl max-w-[200px] ${colors.bg}`}
+                                        >
+                                            <div className={`w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center ${colors.icon}`}>
+                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{doc.filename}</p>
+                                            <p className="text-[10.5px] text-gray-500 mt-0.5">Tài liệu</p>
+                                        </div>
+                                        <button
+                                            onClick={() => onDocumentRemove(doc.id)}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:scale-110"
+                                            title={`Remove ${doc.filename}`}
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
-                    </button>
 
-                </div>
-                <QuotaWidget quota={quota} warning={quotaWarning} inline />
-                </div>
+                        <div className="flex items-end space-x-2 p-2">
+                        <button
+                            onClick={() => setShowDocPicker(true)}
+                            className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
+                            title="Add documents"
+                        >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
 
-                <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
-                    DeepMory can make mistakes, please check the response.
+                        <div className="flex-1 relative pt-2 pb-1.5">
+                            <DropdownMenu
+                                items={filteredCommands}
+                                selectedIndex={selectedIndex}
+                                visible={showCommands}
+                                position="top"
+                                onSelect={(item) => selectCommand(item)}
+                                onHover={(index) => setSelectedIndex(index)}
+                            />
+
+                            <div
+                                ref={editorRef}
+                                contentEditable={!disabled}
+                                onInput={handleInput}
+                                onKeyDown={handleKeyDown}
+                                onPaste={handlePaste}
+                                onCompositionStart={() => { isComposing.current = true; }}
+                                onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
+                                data-placeholder="Hỏi bất kỳ điều gì"
+                                className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                                role="textbox"
+                                style={{ minHeight: '24px' }}
+                            />
+                        </div>
+
+                        {quotaBlocked && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
+                                <span className="text-sm text-red-600 font-medium">
+                                    Quota exceeded. Please wait for reset.
+                                </span>
+                            </div>
+                        )}
+
+                        {isStreaming ? (
+                            <button
+                                onClick={onStop}
+                                className="flex-shrink-0 p-2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm transition-colors"
+                                title="Dừng phản hồi"
+                            >
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                                </svg>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSend}
+                                disabled={!message.trim() || disabled}
+                                className={`flex-shrink-0 p-2 rounded-full transition-colors ${message.trim() && !disabled
+                                    ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
+                                    : 'bg-transparent text-text-muted cursor-not-allowed'
+                                }`}
+                                title={message.trim() ? "Gửi tin nhắn" : "Ghi âm"}
+                            >
+                                {message.trim() ? (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
+                DeepMory can make mistakes, please check the response.
+            </div>
         </div>
+
+            {
+        showDocPicker && (
+            <DocumentPickerModal
+                onConfirm={onDocumentsConfirm}
+                onClose={() => setShowDocPicker(false)}
+                selectedIds={selectedDocs.map(d => d.id)}
+            />
+        )
+    }
+        </div >
     );
 }
 

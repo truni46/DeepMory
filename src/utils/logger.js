@@ -7,13 +7,13 @@ class Logger {
     }
 
     formatMessage(level, message, ...args) {
-        const timestamp = new Date().toLocaleTimeString();
+        const timestamp = new Date().toISOString();
         return [`[${timestamp}] [${level}]`, message, ...args];
     }
 
     info(message, ...args) {
         if (this.isDevelopment) {
-            console.log(...this.formatMessage('INFO', message), ...args);
+            console.log(...this.formatMessage(`INFO`, message), ...args);
         }
     }
 

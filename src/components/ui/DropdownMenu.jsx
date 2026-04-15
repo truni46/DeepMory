@@ -50,25 +50,26 @@ export default function DropdownMenu({
                             className={`w-full px-2.5 py-1.5 text-left rounded-md transition-colors ${
                                 isActive
                                     ? 'bg-teal-900/10'
-                                    : 'hover:bg-gray-50'
+                            : 'hover:bg-gray-50'
                             }`}
-                        >
-                            {item.label && (
-                                <div className={`text-sm font-medium ${
+                >
+                {
+                    item.label && (
+                        <div className={`text-sm font-medium ${
                                     isActive ? 'text-teal-900' : 'text-text-primary'
                                 }`}>
-                                    {item.label}
+                                    { item.label }
                                 </div>
                             )}
-                            {item.description && (
-                                <div className="text-xs text-text-muted leading-tight truncate">
-                                    {item.description}
-                                </div>
-                            )}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
+            {item.description && (
+                <div className="text-xs text-text-muted leading-tight truncate">
+                    {item.description}
+                </div>
+            )}
+        </button>
+    );
+})}
+            </div >
+        </div >
     );
 }

@@ -84,7 +84,12 @@ def setup_logger():
         datefmt='%H:%M:%S'
     )
     
-    # Console Handler (colored)
+    # Force UTF-8 on Windows console (prevents cp1252 UnicodeEncodeError for non-ASCII text)
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+        except Exception:
+            pass
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(ColoredFormatter('%(asctime)s - %(levelname)s - %(message)s'))
