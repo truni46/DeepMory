@@ -1,7 +1,7 @@
 """
 Short-term memory repository.
 Hot path: Redis (context window + summary cache).
-Cold path: PostgreSQL conversation_summaries table.
+Cold path: PostgreSQL "conversationSummaries" table.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class ConvMemoryRepository:
         if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    """SELECT summary FROM conversation_summaries WHERE "conversationId" = $1""",
+                    """SELECT summary FROM "conversationSummaries" WHERE "conversationId" = $1""",
                     conversationId,
                 )
                 if row:
@@ -71,7 +71,7 @@ class ConvMemoryRepository:
         if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
                 await conn.execute(
-                    """INSERT INTO conversation_summaries ("conversationId", summary, "tokenCount", "updatedAt")
+                    """INSERT INTO "conversationSummaries" ("conversationId", summary, "tokenCount", "updatedAt")
                        VALUES ($1, $2, $3, now())
                        ON CONFLICT ("conversationId")
                        DO UPDATE SET summary = EXCLUDED.summary,
@@ -85,7 +85,7 @@ class ConvMemoryRepository:
         if db.useDatabase and db.pool:
             async with db.pool.acquire() as conn:
                 await conn.execute(
-                    """DELETE FROM conversation_summaries WHERE "conversationId" = $1""",
+                    """DELETE FROM "conversationSummaries" WHERE "conversationId" = $1""",
                     conversationId,
                 )
 

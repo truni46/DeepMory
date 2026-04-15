@@ -11,7 +11,7 @@ class MCPProvider:
             
         async with db.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM mcp_servers WHERE user_id = $1 AND is_active = TRUE",
+                "SELECT * FROM \"mcpServers\" WHERE \"userId\" = $1 AND \"isActive\" = TRUE",
                 user_id
             )
             return [dict(row) for row in rows]
