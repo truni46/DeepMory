@@ -45,7 +45,7 @@ class CacheService:
         if not self.redis:
             return
         try:
-            await self.redis.set(key, json.dumps(value), ex=expire)
+            await self.redis.set(key, json.dumps(value, ensure_ascii=False), ex=expire)
         except Exception as e:
             logger.error(f"Error writing to cache: {e}")
 

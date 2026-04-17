@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s http://localhost:3000/openapi.json)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d[''''paths''''].keys\\(\\)\\)[:5]\\)\")",
+      "Bash(find \"D:/Work/VTC_Telecom/AI_Tutor/ai-tutor-web/server\" -name \"*.pyc\" -path \"*/main*\" -delete)",
+      "Bash(find \"D:/Work/VTC_Telecom/AI_Tutor/ai-tutor-web/server\" -name \"*.pyc\" -path \"*/apiRouter*\" -delete)",
+      "Bash(netstat -ano)",
+      "Bash(cmd /c \"taskkill /F /IM python.exe /T 2>nul & taskkill /F /IM python3.exe /T 2>nul & echo Done\")",
+      "Bash(curl -s http://localhost:3000/v1/auth/me)",
+      "Bash(curl -s http://localhost:3000/auth/me)",
+      "Bash(cmd /c \"netstat -ano | findstr :3000 | findstr LISTEN\")",
+      "Bash(cmd /c \"netstat -ano | findstr :3000\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); paths=list\\(d[''''paths''''].keys\\(\\)\\); print\\(''''Has /v1:'''', any\\(p.startswith\\(''''/v1''''\\) for p in paths\\)\\); print\\(''''First 3 paths:'''', paths[:3]\\)\")",
+      "Bash(cmd /c \"for /f \"\"tokens=5\"\" %a in \\(''netstat -aon 2^>nul ^| findstr :3000 ^| findstr LISTEN''\\) do \\(echo PID: %a && taskkill /F /PID %a 2^>&1\\)\")",
+      "Bash(powershell -Command \"Get-Process -Id 5824 | Select-Object Id, ProcessName, Path, CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 5824 -Force\")",
+      "Bash(.venv/Scripts/python -c \"import inspect; from lightrag import LightRAG; sig = inspect.signature\\(LightRAG.__init__\\); print\\([p for p in sig.parameters]\\)\")",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(find /d/Work/VTC_Telecom/AI_Tutor/ai-tutor-web -name *agentTask* -o -name *agentRun*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(curl -s http://localhost:3001/api/v1/health)",
+      "Bash(docker rm:*)",
+      "Bash(git add:*)",
+      "Bash(curl -I http://localhost:8080/)",
+      "Bash(docker compose:*)",
+      "Bash(.venv/Scripts/python.exe -c \"import yaml; yaml.safe_load\\(open\\(''.github/workflows/ci-cd.yml''\\)\\)\")",
+      "Bash(chmod +x deploy/bootstrap.sh)",
+      "Bash(git update-index:*)",
+      "Bash(/tmp/gh/bin/gh pr:*)",
+      "Bash(curl -s http://localhost:5173/login)",
+      "Bash(wmic process:*)",
+      "Bash(tasklist /fi \"pid eq 36020\" /v /fo list)",
+      "Bash(powershell -Command \"Get-Process -Id 36020 | Select-Object Id,ProcessName,Path | Format-List\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter ''ProcessId=36020'' | Select-Object CommandLine | Format-List\")"
+    ]
+  }
+}

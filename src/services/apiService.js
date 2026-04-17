@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
  * API Service for making HTTP requests
@@ -29,8 +29,13 @@ class APIService {
             const response = await fetch(url, config);
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: 'Request failed' }));
-                throw new Error(error.error || `HTTP ${response.status}`);
+                if (response.status === 401) {
+                    localStorage.removeItem('accessToken');
+                    window.dispatchEvent(new Event('auth:unauthorized'));
+                }
+
+                const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                throw new Error(error.detail || error.error || error.message || `HTTP ${response.status}`);
             }
 
             // Handle different response types
@@ -83,7 +88,22 @@ class APIService {
     // Download file
     async download(endpoint, filename) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`);
+            const token = localStorage.getItem('accessToken');
+            const config = { headers: {} };
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${this.baseURL}${endpoint}`, config);
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    localStorage.removeItem('accessToken');
+                    window.dispatchEvent(new Event('auth:unauthorized'));
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const blob = await response.blob();
 
             // Create download link

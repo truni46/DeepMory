@@ -4,55 +4,41 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=str(Path(__file__).parent.parent / ".env"))
 
 
-async def run_migration():
-    """Run database migration"""
-    print("Running database migration...")
-    
-    # Database configuration
-    db_config = {
-        'host': os.getenv('DB_HOST', 'localhost'),
-        'port': int(os.getenv('DB_PORT', 5432)),
-        'database': os.getenv('DB_NAME', 'ai_tutor_db'),
-        'user': os.getenv('DB_USER', 'ai_tutor'),
-        'password': os.getenv('DB_PASSWORD', ''),
+async def runMigration():
+    """Run all pending database migrations in numeric order."""
+    print("Running database migrations...")
+    dbConfig = {
+        "host": os.getenv("DB_HOST", "localhost"),
+        "port": int(os.getenv("DB_PORT", 5432)),
+        "database": os.getenv("DB_NAME", "deepmory"),
+        "user": os.getenv("DB_USER", "admin"),
+        "password": os.getenv("DB_PASSWORD", ""),
     }
-    
     try:
-        # Connect to database
-        conn = await asyncpg.connect(**db_config)
-        print(f"Connected to database: {db_config['database']}")
-        
-        # Read migration SQL file
-        migration_file = Path(__file__).parent / '001_initial_schema.sql'
-        
-        if not migration_file.exists():
-            # Try parent directory (server folder)
-            migration_file = Path(__file__).parent.parent.parent / 'server' / 'migrations' / '001_initial_schema.sql'
-        
-        if not migration_file.exists():
-            print("Migration file not found!")
-            return
-        
-        with open(migration_file, 'r', encoding='utf-8') as f:
-            sql = f.read()
-        
-        print(f"Running migration from: {migration_file.name}")
-        
-        # Execute migration
-        await conn.execute(sql)
-        
-        print("Migration completed successfully!")
-        
-        # Close connection
+        conn = await asyncpg.connect(**dbConfig)
+        print(f"Connected to database: {dbConfig['database']}")
+
+        migrationDir = Path(__file__).parent
+        sqlFiles = sorted(migrationDir.glob("[0-9][0-9][0-9]_*.sql"))
+
+        for sqlFile in sqlFiles:
+            print(f"Running: {sqlFile.name}")
+            sql = sqlFile.read_text(encoding="utf-8")
+            try:
+                await conn.execute(sql)
+                print(f"  OK: {sqlFile.name}")
+            except Exception as e:
+                print(f"  WARN: {sqlFile.name} — {e} (may already exist, continuing)")
+
         await conn.close()
-        
+        print("Migrations completed.")
     except Exception as e:
         print(f"Migration failed: {e}")
         raise
 
 
 if __name__ == "__main__":
-    asyncio.run(run_migration())
+    asyncio.run(runMigration())

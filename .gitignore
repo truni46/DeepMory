@@ -26,10 +26,24 @@ Thumbs.db
 
 # Data files
 server/data/*.json
-server/migrations/*.sql
+data/
+server/data/uploads/
+
+# Runtime storage
+server/rag_storage/
+
+# Pytest cache
+.pytest_cache/
+server/.pytest_cache/
 
 # Build files
 *.tsbuildinfo
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Testing files
 server/testing/*

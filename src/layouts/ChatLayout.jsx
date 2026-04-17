@@ -1,23 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import Sidebar from '../components/Sidebar';
-import SettingsPanel from '../components/SettingsPanel';
+import ToastContainer from '../components/ui/Toast';
 import logger from '../utils/logger';
 
 export default function ChatLayout() {
     const { user, isAuthenticated, isLoading } = useAuth();
+    const { toasts, dismiss } = useToast();
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Derive activeConversationId from URL — source of truth for which conversation is open
+    const pathMatch = location.pathname.match(/^\/c\/(.+)/);
+    const activeConversationId = pathMatch ? pathMatch[1] : null;
+
+    const setActiveConversationId = (id) => navigate(id ? `/c/${id}` : '/');
+
     // Lifted State
     const [conversations, setConversations] = useState([]);
-    const [activeConversationId, setActiveConversationId] = useState(null);
-    const [showSettings, setShowSettings] = useState(false);
     const [settings, setSettings] = useState({
-        communication_mode: 'websocket',
+        communication_mode: 'streaming',
         show_timestamps: true,
         theme: 'light-green',
         welcome_message: ''
@@ -35,17 +41,6 @@ export default function ChatLayout() {
             loadSettings();
         }
     }, [isAuthenticated]);
-
-    // Track if we've handled the initial selection
-    const hasInitialized = useRef(false);
-
-    // Handle initial active conversation based on nav or list
-    useEffect(() => {
-        if (!hasInitialized.current && conversations.length > 0 && !activeConversationId && location.pathname === '/') {
-            setActiveConversationId(conversations[0].id);
-            hasInitialized.current = true;
-        }
-    }, [conversations, activeConversationId, location.pathname]);
 
     const loadConversations = async () => {
         try {
@@ -66,13 +61,11 @@ export default function ChatLayout() {
     };
 
     const handleNewChat = () => {
-        setActiveConversationId(null);
         navigate('/');
     };
 
     const handleSelectConversation = (id) => {
-        setActiveConversationId(id);
-        navigate('/');
+        navigate(`/c/${id}`);
     };
 
     const handleDeleteRequest = (id) => {
@@ -94,14 +87,10 @@ export default function ChatLayout() {
             setDeletingId(null);
             setItemToDelete(null);
 
-            // Handle active selection
+            // Navigate away if deleted conversation was active
             if (activeConversationId === id) {
                 const remaining = conversations.filter(c => c.id !== id);
-                if (remaining.length > 0) {
-                    setActiveConversationId(remaining[0].id);
-                } else {
-                    setActiveConversationId(null);
-                }
+                navigate(remaining.length > 0 ? `/c/${remaining[0].id}` : '/');
             }
 
             // Perform actual API deletion
@@ -132,14 +121,13 @@ export default function ChatLayout() {
         return (
             <div className="flex h-screen items-center justify-center bg-page">
                 <div className="text-center">
-                    <div className="text-6xl mb-4 animate-bounce">🤖</div>
                     <h2 className="text-xl font-semibold text-primary">Loading...</h2>
                 </div>
             </div>
         );
     }
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !localStorage.getItem('accessToken')) {
         return <Navigate to="/login" replace />;
     }
 
@@ -151,27 +139,19 @@ export default function ChatLayout() {
                 onNewChat={handleNewChat}
                 onSelectConversation={handleSelectConversation}
                 onDeleteConversation={handleDeleteConversation}
-                onOpenSettings={() => setShowSettings(true)}
                 user={user}
                 deletingId={deletingId}
             />
 
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-page">
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-page relative">
+                <ToastContainer toasts={toasts} onDismiss={dismiss} />
                 <Outlet context={{
                     activeConversationId,
                     settings,
-                    loadConversations, // Export this so ChatPage can trigger refresh
+                    loadConversations,
                     setActiveConversationId
                 }} />
             </div>
-
-            <SettingsPanel
-                isOpen={showSettings}
-                onClose={() => setShowSettings(false)}
-                settings={settings}
-                onSave={handleSaveSettings}
-                connectionStatus="connected" // Simplified for now
-            />
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (

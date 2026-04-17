@@ -32,6 +32,9 @@ export default {
                 'typing': 'typing 1.4s infinite',
                 'fade-in': 'fadeIn 0.3s ease-in',
                 'slide-up': 'slideUp 0.4s ease-out',
+                'scale-check': 'scaleCheck 0.3s ease-out',
+                'toast-in': 'toastIn 0.3s ease-out',
+                'toast-out': 'toastOut 0.2s ease-in forwards',
             },
             keyframes: {
                 typing: {
@@ -45,6 +48,19 @@ export default {
                 slideUp: {
                     '0%': { transform: 'translateY(10px)', opacity: '0' },
                     '100%': { transform: 'translateY(0)', opacity: '1' },
+                },
+                scaleCheck: {
+                    '0%': { transform: 'scale(0)', opacity: '0' },
+                    '70%': { transform: 'scale(1.2)' },
+                    '100%': { transform: 'scale(1)', opacity: '1' },
+                },
+                toastIn: {
+                    '0%': { transform: 'translateY(-100%)', opacity: '0' },
+                    '100%': { transform: 'translateY(0)', opacity: '1' },
+                },
+                toastOut: {
+                    '0%': { transform: 'translateY(0)', opacity: '1' },
+                    '100%': { transform: 'translateY(-100%)', opacity: '0' },
                 },
             },
         },

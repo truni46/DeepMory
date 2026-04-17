@@ -1,88 +1,377 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import DropdownMenu from './ui/DropdownMenu';
+import QuotaWidget from './QuotaWidget';
+import DocumentPickerModal from './DocumentPickerModal';
 
-export default function ChatInput({ onSend, disabled = false }) {
+const SLASH_COMMANDS = [
+    { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
+    { id: '/agents:plan', label: '/agents:plan', description: 'Create an execution plan', command: '/agents:plan' },
+    { id: '/agents:implement', label: '/agents:implement', description: 'Write code or documents', command: '/agents:implement' },
+    { id: '/agents:report', label: '/agents:report', description: 'Generate a summary report', command: '/agents:report' },
+    { id: '/agents:browser', label: '/agents:browser', description: 'Automate browser actions', command: '/agents:browser' },
+];
+
+function matchCommand(query) {
+    const q = query.toLowerCase();
+    return SLASH_COMMANDS.find(c => {
+        const full = c.command.slice(1);
+        const short = full.split(':')[1] || full;
+        return full === q || short === q;
+    });
+}
+
+function filterCommands(query) {
+    const q = query.toLowerCase();
+    return SLASH_COMMANDS.filter(c => {
+        const full = c.command.slice(1);
+        const short = full.split(':')[1] || full;
+        return full.startsWith(q) || short.startsWith(q);
+    });
+}
+
+function getSlashCommand(text) {
+    const match = text.match(/^(\/[\w:]+)/);
+    if (!match) return null;
+    const raw = match[1].slice(1);
+    const found = matchCommand(raw);
+    if (!found) return null;
+    return { resolved: found.command, raw: match[1] };
+}
+
+function getFileColorConfig(filename) {
+    const ext = filename?.split('.').pop().toLowerCase();
+    if (ext === 'doc' || ext === 'docx') return { bg: 'bg-blue-50 border-blue-100', icon: 'bg-[#0084FF]' };
+    if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return { bg: 'bg-green-50 border-green-200', icon: 'bg-green-500' };
+    if (ext === 'pdf') return { bg: 'bg-orange-50 border-orange-200', icon: 'bg-[#ff6b00]' };
+    return { bg: 'bg-gray-100 border-gray-200', icon: 'bg-gray-500' };
+}
+
+export default function ChatInput({
+    conversationId,
+    onSend,
+    disabled = false,
+    quotaBlocked = false,
+    quota = null,
+    quotaWarning = false,
+    selectedDocs = [],
+    onDocumentsConfirm,
+    onDocumentRemove,
+    isStreaming = false,
+    onStop,
+}) {
     const [message, setMessage] = useState('');
-    const textareaRef = useRef(null);
+    const draftsRef = useRef({});
+    const prevConvIdRef = useRef(conversationId);
+
+    useEffect(() => {
+        if (prevConvIdRef.current !== conversationId) {
+            draftsRef.current[prevConvIdRef.current] = message;
+            
+            const nextMessage = draftsRef.current[conversationId] || '';
+            setMessage(nextMessage);
+            
+            if (editorRef.current) {
+                editorRef.current.textContent = nextMessage;
+            }
+            
+            prevConvIdRef.current = conversationId;
+        }
+    }, [conversationId, message]);
+
+    const [showCommands, setShowCommands] = useState(false);
+    const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [showDocPicker, setShowDocPicker] = useState(false);
+    const editorRef = useRef(null);
+    const isComposing = useRef(false);
+
+    useEffect(() => {
+        if (message.startsWith('/')) {
+            const query = message.slice(1).toLowerCase().split(' ')[0];
+            const hasSpace = message.includes(' ');
+            if (hasSpace && matchCommand(query)) {
+                setShowCommands(false);
+                return;
+            }
+            const filtered = filterCommands(query);
+            setFilteredCommands(filtered);
+            setShowCommands(filtered.length > 0);
+            setSelectedIndex(0);
+        } else {
+            setShowCommands(false);
+        }
+    }, [message]);
+
+    const renderHighlighted = useCallback(() => {
+        const el = editorRef.current;
+        if (!el) return;
+
+        const cmd = getSlashCommand(message);
+        if (cmd) {
+            const rest = message.slice(cmd.raw.length);
+            const html = `<span class="slash-cmd" style="color:#007E6E;font-weight:600;">${cmd.raw}</span>${escapeHtml(rest)}`;
+            if (el.innerHTML !== html) {
+                const offset = getCaretOffset(el);
+                el.innerHTML = html;
+                restoreCaret(el, offset);
+            }
+        } else {
+            const text = el.textContent || '';
+            if (text !== message) {
+                const offset = getCaretOffset(el);
+                el.textContent = message;
+                restoreCaret(el, offset);
+            }
+        }
+    }, [message]);
+
+    useEffect(() => {
+        renderHighlighted();
+    }, [message, renderHighlighted]);
+
+    const selectCommand = (cmd) => {
+        const newMsg = cmd.command + ' ';
+        setMessage(newMsg);
+        setShowCommands(false);
+        requestAnimationFrame(() => {
+            const el = editorRef.current;
+            if (!el) return;
+            el.focus();
+            const totalLen = newMsg.length;
+            restoreCaret(el, totalLen);
+        });
+    };
 
     const handleSend = () => {
         if (message.trim() && !disabled) {
-            onSend(message.trim());
-            setMessage('');
-            if (textareaRef.current) {
-                textareaRef.current.style.height = 'auto';
+            let toSend = message.trim();
+            const cmd = getSlashCommand(toSend);
+            if (cmd && cmd.resolved !== cmd.raw) {
+                toSend = cmd.resolved + toSend.slice(cmd.raw.length);
             }
+            onSend(toSend);
+            setMessage('');
+            if (editorRef.current) {
+                editorRef.current.textContent = '';
+            }
+            setShowCommands(false);
         }
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+    const handleKeyDown = (e) => {
+        if (isComposing.current) return;
+
+        if (showCommands) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev + 1) % filteredCommands.length);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+                return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                selectCommand(filteredCommands[selectedIndex]);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowCommands(false);
+                return;
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                selectCommand(filteredCommands[selectedIndex]);
+                return;
+            }
+        } else if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }
     };
 
-    const handleInput = (e) => {
-        setMessage(e.target.value);
+    const handleInput = () => {
+        const text = editorRef.current?.textContent || '';
+        setMessage(text);
+    };
 
-        // Auto-resize textarea
-        e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+    const handlePaste = (e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
     };
 
     return (
         <div className="bg-transparent p-4">
             <div className="max-w-3xl mx-auto">
-                <div className="relative flex items-end space-x-2 bg-white border border-border rounded-3xl shadow-lg p-2 transition-shadow hover:shadow-xl">
-                    {/* Attach Button */}
-                    <button
-                        className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
-                        title="Add documents"
-                    >
-                        <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
-
-                    {/* Textarea */}
-                    <textarea
-                        ref={textareaRef}
-                        value={message}
-                        onChange={handleInput}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Ask a question..."
-                        disabled={disabled}
-                        className="flex-1 bg-transparent text-sm md:text-[14.5px] text-text-primary placeholder-text-muted resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] py-2 ml-1"
-                        rows={1}
-                        style={{ minHeight: '24px' }}
-                    />
-
-                    {/* Send/Microphone Button */}
-                    <button
-                        onClick={handleSend}
-                        disabled={!message.trim() || disabled}
-                        className={`flex-shrink-0 p-2 rounded-full transition-all duration-200 ${message.trim() && !disabled
-                            ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
-                            : 'bg-transparent text-text-muted cursor-not-allowed'
-                            }`}
-                        title={message.trim() ? "Send message" : "Record audio"}
-                    >
-                        {message.trim() ? (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                            </svg>
-                        ) : (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
+                <div className="flex items-end gap-2">
+                    <div className="relative flex-1 flex flex-col bg-white border border-border rounded-3xl shadow-lg transition-shadow hover:shadow-xl">
+                        
+                        {selectedDocs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-3 px-3 pb-1">
+                                {selectedDocs.map(doc => {
+                                    const colors = getFileColorConfig(doc.filename);
+                                    return (
+                                        <div
+                                            key={doc.id}
+                                            className={`group relative flex items-center gap-2 p-1.5 pr-3 border rounded-xl max-w-[200px] ${colors.bg}`}
+                                        >
+                                            <div className={`w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center ${colors.icon}`}>
+                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{doc.filename}</p>
+                                            <p className="text-[10.5px] text-gray-500 mt-0.5">Tài liệu</p>
+                                        </div>
+                                        <button
+                                            onClick={() => onDocumentRemove(doc.id)}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:scale-110"
+                                            title={`Remove ${doc.filename}`}
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
-                    </button>
-                </div>
 
-                {/* Footer text */}
-                <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
-                    AI-Tutor can make mistakes, please check the response.
+                        <div className="flex items-end space-x-2 p-2">
+                        <button
+                            onClick={() => setShowDocPicker(true)}
+                            className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
+                            title="Add documents"
+                        >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+
+                        <div className="flex-1 relative pt-2">
+                            <DropdownMenu
+                                items={filteredCommands}
+                                selectedIndex={selectedIndex}
+                                visible={showCommands}
+                                position="top"
+                                onSelect={(item) => selectCommand(item)}
+                                onHover={(index) => setSelectedIndex(index)}
+                            />
+
+                            <div
+                                ref={editorRef}
+                                contentEditable={!disabled}
+                                onInput={handleInput}
+                                onKeyDown={handleKeyDown}
+                                onPaste={handlePaste}
+                                onCompositionStart={() => { isComposing.current = true; }}
+                                onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
+                                data-placeholder="Hỏi bất kỳ điều gì"
+                                className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                                role="textbox"
+                                style={{ minHeight: '24px' }}
+                            />
+                        </div>
+
+                        {quotaBlocked && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
+                                <span className="text-sm text-red-600 font-medium">
+                                    Quota exceeded. Please wait for reset.
+                                </span>
+                            </div>
+                        )}
+
+                        {isStreaming ? (
+                            <button
+                                onClick={onStop}
+                                className="flex-shrink-0 p-2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm transition-colors"
+                                title="Dừng phản hồi"
+                            >
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                                </svg>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSend}
+                                disabled={!message.trim() || disabled}
+                                className={`flex-shrink-0 p-2 rounded-full transition-colors ${message.trim() && !disabled
+                                    ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
+                                    : 'bg-transparent text-text-muted cursor-not-allowed'
+                                }`}
+                                title={message.trim() ? "Gửi tin nhắn" : "Ghi âm"}
+                            >
+                                {message.trim() ? (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
+                DeepMory can make mistakes, please check the response.
+            </div>
         </div>
+
+            {
+        showDocPicker && (
+            <DocumentPickerModal
+                onConfirm={onDocumentsConfirm}
+                onClose={() => setShowDocPicker(false)}
+                selectedIds={selectedDocs.map(d => d.id)}
+            />
+        )
+    }
+        </div >
     );
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function getCaretOffset(el) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return 0;
+    const range = sel.getRangeAt(0).cloneRange();
+    range.selectNodeContents(el);
+    range.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+    return range.toString().length;
+}
+
+function restoreCaret(el, offset) {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    let current = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+        const len = node.textContent.length;
+        if (current + len >= offset) {
+            range.setStart(node, offset - current);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return;
+        }
+        current += len;
+    }
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
 }

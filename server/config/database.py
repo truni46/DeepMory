@@ -1,7 +1,5 @@
 import os
 import json
-import psycopg2
-from psycopg2 import pool
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
@@ -16,7 +14,7 @@ class Database:
     
     def __init__(self):
         self.useDatabase = os.getenv('USE_DATABASE', 'false').lower() == 'true'
-        self.pool: Optional[pool.SimpleConnectionPool] = None
+        self.pool = None
         # Move up from config -> server -> root -> data
         self.data_dir = Path(__file__).parent.parent.parent / 'data'
         self.data_dir.mkdir(exist_ok=True)
@@ -25,8 +23,8 @@ class Database:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': int(os.getenv('DB_PORT', 5432)),
-            'database': os.getenv('DB_NAME', 'ai_tutor_db'),
-            'user': os.getenv('DB_USER', 'ai_tutor'),
+            'database': os.getenv('DB_NAME', 'deepmory_db'),
+            'user': os.getenv('DB_USER', 'deepmory'),
             'password': os.getenv('DB_PASSWORD', ''),
         }
     
@@ -65,8 +63,6 @@ class Database:
         except Exception as e:
             logger.error(f"Database connection check failed: {e}")
             return False
-    
-    # ========== JSON File Storage Methods ==========
     
     def get_json_file(self, name: str) -> Path:
         """Get path to JSON file"""

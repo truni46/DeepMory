@@ -37,3 +37,4 @@ class MessageRequest(BaseModel):
     message: str
     conversationId: str
     projectId: Optional[str] = None
+    documentIds: Optional[List[str]] = None

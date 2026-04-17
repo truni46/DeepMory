@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Production overrides applied via:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# - Closes internal service ports from the host
+# - Removes dev-only redis-commander
+# - Adds restart policies + log rotation
+
+services:
+  backend:
+    restart: always
+    environment:
+      - APP_ENV=production
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    restart: always
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    restart: always
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  qdrant:
+    restart: always
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  neo4j:
+    restart: always
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-commander:
+    profiles:
+      - never

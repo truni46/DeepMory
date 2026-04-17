@@ -1,24 +1,28 @@
 {
-    "name": "ai-tutor-web",
+    "name": "deepmory-web",
     "private": true,
     "version": "1.0.0",
     "type": "module",
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "serve": "serve dist -s -l 5173"
     },
     "dependencies": {
         "@tailwindcss/typography": "^0.5.19",
         "easymde": "^2.20.0",
+        "mammoth": "^1.12.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-icons": "^5.5.0",
         "react-markdown": "^10.1.0",
+        "react-pdf": "^10.4.1",
         "react-router-dom": "^7.13.0",
         "react-simplemde-editor": "^5.2.0",
         "save": "^2.9.0",
-        "socket.io-client": "^4.6.1"
+        "socket.io-client": "^4.6.1",
+        "xlsx": "^0.18.5"
     },
     "devDependencies": {
         "@types/react": "^18.2.43",

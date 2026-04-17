@@ -23,7 +23,7 @@ class HistoryService:
         """Save a message to history"""
         try:
             messageId = str(uuid.uuid4())
-            message = await message_repository.create(
+            message = await messageRepository.create(
                 conversationId=conversationId,
                 role=role,
                 content=content,
@@ -40,7 +40,7 @@ class HistoryService:
     async def searchMessages(query: str, limit: int = 50) -> List[Dict]:
         """Search messages"""
         try:
-            messages = await message_repository.search(query, limit)
+            messages = await messageRepository.search(query, limit)
             logger.info(f"Found {len(messages)} messages for query: {query[:50]}")
             return messages
         except Exception as e:

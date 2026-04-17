@@ -1,0 +1,222 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: deepmory
+          POSTGRES_PASSWORD: deepmory_test_pass
+          POSTGRES_DB: deepmory_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U deepmory -d deepmory_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      USE_DATABASE: "true"
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: deepmory_test
+      DB_USER: deepmory
+      DB_PASSWORD: deepmory_test_pass
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      SECRET_KEY: test_secret_key_for_ci_only
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      LLM_PROVIDER: ollama
+      LLM_MODEL: test-model
+      OLLAMA_BASE_URL: http://localhost:11434/v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: server/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev gcc
+
+      - name: Install Python dependencies
+        working-directory: server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        working-directory: server
+        run: pytest -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_API_URL: /api/v1
+          VITE_SOCKET_URL: ""
+
+  deploy:
+    name: Deploy to VPS
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+
+    env:
+      COMPOSE_CMD: docker compose -f docker-compose.yml -f docker-compose.prod.yml
+      APP_DIR: /opt/deepmory
+
+    steps:
+      - name: Pull latest code
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Fetching latest changes..."
+          git fetch origin main
+          PREV=$(git rev-parse HEAD)
+          git reset --hard origin/main
+          CURR=$(git rev-parse HEAD)
+          echo "prev=$PREV" >> "$GITHUB_ENV"
+          echo "curr=$CURR" >> "$GITHUB_ENV"
+
+      - name: Detect changed services
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          if [ "${{ env.prev }}" = "${{ env.curr }}" ]; then
+            echo "No new commits — restarting services only"
+            echo "build_frontend=false" >> "$GITHUB_ENV"
+            echo "build_backend=false" >> "$GITHUB_ENV"
+            echo "restart_only=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "restart_only=false" >> "$GITHUB_ENV"
+          CHANGED=$(git diff "${{ env.prev }}" "${{ env.curr }}" --name-only)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Backend: rebuild if Dockerfile or requirements.txt changed
+          if echo "$CHANGED" | grep -qE "^server/(Dockerfile|requirements\.txt)"; then
+            echo "build_backend=true" >> "$GITHUB_ENV"
+          else
+            echo "build_backend=false" >> "$GITHUB_ENV"
+          fi
+
+          # Frontend: rebuild if Dockerfile, nginx.conf, src/, package, or config changed
+          if echo "$CHANGED" | grep -qE "^(Dockerfile|nginx\.conf|package.*\.json|src/|index\.html|vite\.config|public/|tailwind\.config)"; then
+            echo "build_frontend=true" >> "$GITHUB_ENV"
+          else
+            echo "build_frontend=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build changed services
+        if: env.restart_only == 'false'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          BUILD_ARGS=""
+
+          if [ "${{ env.build_backend }}" = "true" ]; then
+            echo "==> Rebuilding backend..."
+            BUILD_ARGS="$BUILD_ARGS backend"
+          fi
+
+          if [ "${{ env.build_frontend }}" = "true" ]; then
+            echo "==> Rebuilding frontend..."
+            BUILD_ARGS="$BUILD_ARGS frontend"
+          fi
+
+          if [ -n "$BUILD_ARGS" ]; then
+            ${{ env.COMPOSE_CMD }} build $BUILD_ARGS
+          else
+            echo "==> No image rebuilds needed (source-only changes)"
+          fi
+
+      - name: Deploy services
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Starting services..."
+          ${{ env.COMPOSE_CMD }} up -d
+          echo "==> Cleaning up old images..."
+          docker image prune -f
+
+      - name: Health check
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Waiting for services to start..."
+          sleep 15
+
+          echo "==> Checking backend health..."
+          if ! curl -fsS --retry 3 --retry-delay 5 http://localhost:3000/api/v1/health; then
+            echo "Backend health check FAILED"
+            echo "==> Recent backend logs:"
+            ${{ env.COMPOSE_CMD }} logs --tail=50 backend
+            exit 1
+          fi
+
+          echo "==> Checking frontend health..."
+          if ! curl -fsS --retry 3 --retry-delay 5 http://localhost/; then
+            echo "Frontend health check FAILED"
+            echo "==> Recent frontend logs:"
+            ${{ env.COMPOSE_CMD }} logs --tail=50 frontend
+            exit 1
+          fi
+
+          echo "==> All health checks passed!"
+
+      - name: Rollback on failure
+        if: failure()
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Deploy failed! Rolling back to previous commit..."
+          git reset --hard ${{ env.prev }}
+
+          if [ "${{ env.build_backend }}" = "true" ] || [ "${{ env.build_frontend }}" = "true" ]; then
+            BUILD_ARGS=""
+            [ "${{ env.build_backend }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS backend"
+            [ "${{ env.build_frontend }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS frontend"
+            ${{ env.COMPOSE_CMD }} build $BUILD_ARGS
+          fi
+
+          ${{ env.COMPOSE_CMD }} up -d
+          echo "==> Rollback complete. Services restored to previous version."
