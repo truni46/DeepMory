@@ -2,13 +2,15 @@
 import apiService from './apiService';
 
 class DocumentService {
-    uploadDocuments(files, onProgress, scope = 'personal') {
+    uploadDocuments(files, onProgress, scope = 'personal', onXhr) {
         return new Promise((resolve, reject) => {
             const formData = new FormData();
             files.forEach(file => formData.append('files', file));
 
             const xhr = new XMLHttpRequest();
             const token = localStorage.getItem('accessToken');
+
+            if (onXhr) onXhr(xhr);
 
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable && onProgress) {
@@ -29,6 +31,7 @@ class DocumentService {
             };
 
             xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.onabort = () => reject(new Error('Upload aborted'));
 
             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
             xhr.open('POST', `${baseUrl}/knowledge/documents/upload?scope=${scope}`);

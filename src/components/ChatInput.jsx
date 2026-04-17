@@ -254,7 +254,7 @@ export default function ChatInput({
                             </svg>
                         </button>
 
-                        <div className="flex-1 relative pt-2 pb-1.5">
+                        <div className="flex-1 relative pt-2">
                             <DropdownMenu
                                 items={filteredCommands}
                                 selectedIndex={selectedIndex}

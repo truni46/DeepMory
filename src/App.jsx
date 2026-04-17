@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import LoginPage from './pages/LoginPage';
 import DocumentsPage from './pages/DocumentsPage';
 import ChatPage from './pages/ChatPage';
@@ -9,6 +10,7 @@ import ChatLayout from './layouts/ChatLayout';
 function App() {
     return (
         <Router>
+            <ToastProvider>
             <AuthProvider>
                 <Routes>
                     <Route path="/login" element={<LoginPage />} />
@@ -25,6 +27,7 @@ function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </AuthProvider>
+            </ToastProvider>
         </Router>
     );
 }

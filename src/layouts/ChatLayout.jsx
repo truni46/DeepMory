@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import Sidebar from '../components/Sidebar';
+import ToastContainer from '../components/ui/Toast';
 import logger from '../utils/logger';
 
 export default function ChatLayout() {
     const { user, isAuthenticated, isLoading } = useAuth();
+    const { toasts, dismiss } = useToast();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -140,11 +143,12 @@ export default function ChatLayout() {
                 deletingId={deletingId}
             />
 
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-page">
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-page relative">
+                <ToastContainer toasts={toasts} onDismiss={dismiss} />
                 <Outlet context={{
                     activeConversationId,
                     settings,
-                    loadConversations, // Export this so ChatPage can trigger refresh
+                    loadConversations,
                     setActiveConversationId
                 }} />
             </div>

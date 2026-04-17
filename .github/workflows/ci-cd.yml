@@ -95,33 +95,128 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          VITE_API_URL: http://localhost:3000/api/v1
-          VITE_SOCKET_URL: http://localhost:3000
+          VITE_API_URL: /api/v1
+          VITE_SOCKET_URL: ""
 
   deploy:
     name: Deploy to VPS
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+
+    env:
+      COMPOSE_CMD: docker compose -f docker-compose.yml -f docker-compose.prod.yml
+      APP_DIR: /opt/deepmory
 
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          command_timeout: 20m
-          script: |
-            set -e
-            cd /opt/deepmory
-            git fetch origin main
-            git reset --hard origin/main
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml build
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-            docker image prune -f
-            echo "Deploy complete. Verifying health..."
-            sleep 15
-            curl -fsS http://localhost:3000/api/v1/health || (echo "Health check failed" && docker compose logs --tail=100 backend && exit 1)
-            echo "Health OK"
+      - name: Pull latest code
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Fetching latest changes..."
+          git fetch origin main
+          PREV=$(git rev-parse HEAD)
+          git reset --hard origin/main
+          CURR=$(git rev-parse HEAD)
+          echo "prev=$PREV" >> "$GITHUB_ENV"
+          echo "curr=$CURR" >> "$GITHUB_ENV"
+
+      - name: Detect changed services
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          if [ "${{ env.prev }}" = "${{ env.curr }}" ]; then
+            echo "No new commits — restarting services only"
+            echo "build_frontend=false" >> "$GITHUB_ENV"
+            echo "build_backend=false" >> "$GITHUB_ENV"
+            echo "restart_only=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "restart_only=false" >> "$GITHUB_ENV"
+          CHANGED=$(git diff "${{ env.prev }}" "${{ env.curr }}" --name-only)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Backend: rebuild if Dockerfile or requirements.txt changed
+          if echo "$CHANGED" | grep -qE "^server/(Dockerfile|requirements\.txt)"; then
+            echo "build_backend=true" >> "$GITHUB_ENV"
+          else
+            echo "build_backend=false" >> "$GITHUB_ENV"
+          fi
+
+          # Frontend: rebuild if Dockerfile, nginx.conf, src/, package, or config changed
+          if echo "$CHANGED" | grep -qE "^(Dockerfile|nginx\.conf|package.*\.json|src/|index\.html|vite\.config|public/|tailwind\.config)"; then
+            echo "build_frontend=true" >> "$GITHUB_ENV"
+          else
+            echo "build_frontend=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build changed services
+        if: env.restart_only == 'false'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          BUILD_ARGS=""
+
+          if [ "${{ env.build_backend }}" = "true" ]; then
+            echo "==> Rebuilding backend..."
+            BUILD_ARGS="$BUILD_ARGS backend"
+          fi
+
+          if [ "${{ env.build_frontend }}" = "true" ]; then
+            echo "==> Rebuilding frontend..."
+            BUILD_ARGS="$BUILD_ARGS frontend"
+          fi
+
+          if [ -n "$BUILD_ARGS" ]; then
+            ${{ env.COMPOSE_CMD }} build $BUILD_ARGS
+          else
+            echo "==> No image rebuilds needed (source-only changes)"
+          fi
+
+      - name: Deploy services
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Starting services..."
+          ${{ env.COMPOSE_CMD }} up -d
+          echo "==> Cleaning up old images..."
+          docker image prune -f
+
+      - name: Health check
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Waiting for services to start..."
+          sleep 15
+
+          echo "==> Checking backend health..."
+          if ! curl -fsS --retry 3 --retry-delay 5 http://localhost:3000/api/v1/health; then
+            echo "Backend health check FAILED"
+            echo "==> Recent backend logs:"
+            ${{ env.COMPOSE_CMD }} logs --tail=50 backend
+            exit 1
+          fi
+
+          echo "==> Checking frontend health..."
+          if ! curl -fsS --retry 3 --retry-delay 5 http://localhost/; then
+            echo "Frontend health check FAILED"
+            echo "==> Recent frontend logs:"
+            ${{ env.COMPOSE_CMD }} logs --tail=50 frontend
+            exit 1
+          fi
+
+          echo "==> All health checks passed!"
+
+      - name: Rollback on failure
+        if: failure()
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          echo "==> Deploy failed! Rolling back to previous commit..."
+          git reset --hard ${{ env.prev }}
+
+          if [ "${{ env.build_backend }}" = "true" ] || [ "${{ env.build_frontend }}" = "true" ]; then
+            BUILD_ARGS=""
+            [ "${{ env.build_backend }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS backend"
+            [ "${{ env.build_frontend }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS frontend"
+            ${{ env.COMPOSE_CMD }} build $BUILD_ARGS
+          fi
+
+          ${{ env.COMPOSE_CMD }} up -d
+          echo "==> Rollback complete. Services restored to previous version."

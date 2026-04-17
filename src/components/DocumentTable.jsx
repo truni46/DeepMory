@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { FiRefreshCw } from 'react-icons/fi';
 import DocumentCard from './DocumentCard';
 import DocumentDetailModal from './DocumentDetailModal';
+import ConfirmDialog from './ui/ConfirmDialog';
 import Table from './ui/Table';
 import documentService from '../services/documentService';
 
@@ -70,15 +71,28 @@ export default function DocumentTable({ refreshTrigger }) {
         };
     }, []);
 
-    const handleDelete = async documentId => {
-        if (!window.confirm('Delete this document?')) return;
+    const [deleteTarget, setDeleteTarget] = useState(null);
+
+    const handleDeleteRequest = useCallback((documentId) => {
+        const doc = documents.find(d => d.id === documentId);
+        setDeleteTarget({ id: documentId, filename: doc?.filename || 'this document' });
+    }, [documents]);
+
+    const handleDeleteConfirm = useCallback(async () => {
+        if (!deleteTarget) return;
         try {
-            await documentService.deleteDocument(documentId);
-            setDocuments(prev => prev.filter(d => d.id !== documentId));
+            await documentService.deleteDocument(deleteTarget.id);
+            setDocuments(prev => prev.filter(d => d.id !== deleteTarget.id));
         } catch (err) {
             console.error('Delete failed:', err);
+        } finally {
+            setDeleteTarget(null);
         }
-    };
+    }, [deleteTarget]);
+
+    const handleDeleteCancel = useCallback(() => {
+        setDeleteTarget(null);
+    }, []);
 
     return (
         <>
@@ -114,7 +128,7 @@ export default function DocumentTable({ refreshTrigger }) {
                                 key={doc.id}
                                 document={doc}
                                 onView={setSelectedDoc}
-                                onDelete={handleDelete}
+                                onDelete={handleDeleteRequest}
                             />
                         ))}
                     </Table>
@@ -127,6 +141,16 @@ export default function DocumentTable({ refreshTrigger }) {
                     onClose={() => setSelectedDoc(null)}
                 />
             )}
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                title="Delete document?"
+                description={deleteTarget ? `"${deleteTarget.filename}" will be permanently deleted. This action cannot be undone.` : ''}
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                onConfirm={handleDeleteConfirm}
+                onCancel={handleDeleteCancel}
+            />
         </>
     );
 }

@@ -1,5 +1,7 @@
 // src/components/DocumentCard.jsx
+import { useState } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
+import { HiTrash } from 'react-icons/hi2';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { TableRow, TableCell } from './ui/Table';
 
@@ -11,6 +13,7 @@ function formatFileSize(bytes) {
 }
 
 export default function DocumentCard({ document, onView, onDelete }) {
+    const [hovered, setHovered] = useState(false);
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
     });
@@ -43,10 +46,15 @@ export default function DocumentCard({ document, onView, onDelete }) {
                 <div className="flex items-center justify-end">
                     <button
                         onClick={e => { e.stopPropagation(); onDelete(document.id); }}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded hover:bg-red-50"
+                        onMouseEnter={() => setHovered(true)}
+                        onMouseLeave={() => setHovered(false)}
+                        className="p-2 transition-colors"
                         title="Delete"
                     >
-                        <FiTrash2 size={16} />
+                        {hovered
+                            ? <HiTrash size={16} className="text-red-400" />
+                            : <FiTrash2 size={16} className="text-gray-400" />
+                        }
                     </button>
                 </div>
             </TableCell>

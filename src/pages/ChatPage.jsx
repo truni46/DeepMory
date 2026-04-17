@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useToast } from '../context/ToastContext'; // DEMO - remove after testing
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import TypingIndicator from '../components/TypingIndicator';
@@ -27,7 +28,7 @@ const SCROLL_THRESHOLD = 120; // px from bottom to consider "at bottom"
 
 export default function ChatPage() {
     const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
-
+    const toast = useToast(); // DEMO - remove after testing
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
@@ -466,6 +467,10 @@ export default function ChatPage() {
                     </h2>
                 </div>
                 <div className="flex items-center space-x-2">
+                    {/* DEMO toast buttons - remove after testing */}
+                    <button onClick={() => toast.success('Saved successfully')} className="px-2.5 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 transition-colors">Toast Success</button>
+                    <button onClick={() => toast.info('Request in progress', "We're processing your request. You'll be notified once it's done.")} className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 transition-colors">Toast Info</button>
+                    <button onClick={() => toast.error('Something went wrong', "We couldn't complete your request. Check your connection and try again.")} className="px-2.5 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 transition-colors">Toast Error</button>
                     {quotaStatus && (
                         <QuotaWidget quota={quotaStatus} warning={quotaWarning} inline />
                     )}
