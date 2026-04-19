@@ -318,7 +318,7 @@ class SimpleRagProvider:
                 if r.payload.get("documentId")
             ]
         except Exception as e:
-            logger.warning(f"SimpleRagProvider.searchDocumentIndex failed for user {userId}: {e}")
+            logger.debug(f"SimpleRagProvider.searchDocumentIndex failed for user {userId}: {e}")
             return []
 
     async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:

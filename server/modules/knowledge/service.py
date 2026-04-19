@@ -166,14 +166,18 @@ class DocumentService:
             logger.info(f"_generateSummary completed for {documentId}")
             doc = await documentRepository.getById(documentId)
             if doc:
-                asyncio.create_task(
-                    ragService.upsertDocumentIndex(
-                        userId=doc.get("userId", ""),
-                        documentId=documentId,
-                        filename=doc.get("filename", ""),
-                        summary=response,
+                docUserId = doc.get("userId") or ""
+                if docUserId:
+                    asyncio.create_task(
+                        ragService.upsertDocumentIndex(
+                            userId=docUserId,
+                            documentId=documentId,
+                            filename=doc.get("filename", ""),
+                            summary=response,
+                        )
                     )
-                )
+                else:
+                    logger.warning(f"_generateSummary: skipping upsertDocumentIndex for {documentId} — missing userId")
         except Exception as e:
             logger.error(f"_generateSummary failed for {documentId}: {e}")
             await documentRepository.updateSummary(documentId, "failed")
@@ -268,6 +272,7 @@ class DocumentService:
             await ragService.deleteDocumentChunks(ownerId, documentId)
         except Exception as e:
             logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
+        # doc-index is keyed by userId (uploader), not ownerId (project/user namespace)
         try:
             await ragService.deleteDocumentIndex(userId, documentId)
         except Exception as e:

@@ -202,6 +202,9 @@ class MessageService:
         yield f"\n__QUOTA__{json.dumps(quotaStatus)}__QUOTA__"
 
         allSources = [s for s in (ragSources + documentSources) if s.get("filename")]
+        for d in autoDetectedDocs:
+            if d.get("filename") not in {s.get("filename") for s in allSources}:
+                allSources.append({"filename": d.get("filename"), "documentId": d.get("documentId"), "pageNumber": None})
         if allSources:
             yield f"\n__SOURCES__{json.dumps(allSources)}__SOURCES__"
 
