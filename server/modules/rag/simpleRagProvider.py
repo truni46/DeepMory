@@ -268,5 +268,70 @@ class SimpleRagProvider:
         except Exception as e:
             logger.error(f"SimpleRagProvider.deleteMemoryVector failed memoryId={memoryId}: {e}")
 
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        try:
+            collName = self._collectionName(f"doc_index_{userId}")
+            await self._ensureCollection(collName)
+            client = await self._getClient()
+            vector = await embeddingService.embed(summary)
+            await client.upsert(
+                collection_name=collName,
+                points=[
+                    PointStruct(
+                        id=documentId,
+                        vector=vector,
+                        payload={
+                            "documentId": documentId,
+                            "filename": filename,
+                            "userId": userId,
+                        },
+                    )
+                ],
+            )
+            logger.info(f"SimpleRagProvider: upserted doc index for document {documentId}")
+        except Exception as e:
+            logger.error(f"SimpleRagProvider.upsertDocumentIndex failed for document {documentId}: {e}")
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        try:
+            client = await self._getClient()
+            collName = self._collectionName(f"doc_index_{userId}")
+            queryVector = await embeddingService.embed(query)
+            results = await client.search(
+                collection_name=collName,
+                query_vector=queryVector,
+                limit=limit,
+                with_payload=True,
+                score_threshold=threshold,
+            )
+            return [
+                {
+                    "documentId": r.payload.get("documentId"),
+                    "filename": r.payload.get("filename"),
+                    "score": r.score,
+                }
+                for r in results
+                if r.payload.get("documentId")
+            ]
+        except Exception as e:
+            logger.warning(f"SimpleRagProvider.searchDocumentIndex failed for user {userId}: {e}")
+            return []
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        try:
+            client = await self._getClient()
+            collName = self._collectionName(f"doc_index_{userId}")
+            await client.delete(
+                collection_name=collName,
+                points_selector=PointIdsList(points=[documentId]),
+            )
+            logger.info(f"SimpleRagProvider: deleted doc index for document {documentId}")
+        except Exception as e:
+            logger.error(f"SimpleRagProvider.deleteDocumentIndex failed for document {documentId}: {e}")
+
 
 simpleRagProvider = SimpleRagProvider()
