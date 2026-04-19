@@ -13,6 +13,7 @@ from modules.settings.service import settingsService
 from modules.conversations.service import conversationService
 from modules.quota.service import quotaService
 from modules.memory.shortTerm.contextWindowManager import contextWindowManager
+from common.prompts import CHAT_SYSTEM, TITLE_SYSTEM, titleUserPrompt, docrefInstruction
 from config.logger import logger
 
 
@@ -40,32 +41,7 @@ class MessageService:
 
     @staticmethod
     def _buildDocrefInstruction(sources: List[Dict]) -> str:
-        if not sources:
-            return ""
-        seen = set()
-        unique = []
-        for s in sources:
-            key = s.get("filename", "")
-            if key and key not in seen:
-                seen.add(key)
-                unique.append(s)
-        if not unique:
-            return ""
-        lines = []
-        for s in unique:
-            docId = s.get("documentId", "")
-            filename = s.get("filename", "")
-            entry = f'- file="{filename}"' + (f' docId="{docId}"' if docId else "")
-            lines.append(entry)
-        docList = "\n".join(lines)
-        return (
-            "\n\nWhen your answer references content from a document listed below, "
-            "cite it inline using this XML tag:\n"
-            '  <docref file="filename" docId="id" page="N">cited text</docref>\n'
-            "Use page attribute only when you know the page number from the context. "
-            "Available documents:\n"
-            f"{docList}"
-        )
+        return docrefInstruction(sources)
 
     @staticmethod
     def buildUsageDict(content: str, model: str) -> dict:
@@ -139,7 +115,7 @@ class MessageService:
         memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
 
-        systemPrompt = "You are a helpful AI assistant."
+        systemPrompt = CHAT_SYSTEM
         if ragContext:
             systemPrompt += f"\n\nRelevant Context:\n{ragContext}"
         if documentContext:
@@ -270,14 +246,8 @@ class MessageService:
         try:
             logger.info(f"Generating title for conversation {conversationId}")
             prompt = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that generates short, concise titles for conversations. Max 6 words. No quotes. No prefixes like 'Title:'.",
-                },
-                {
-                    "role": "user",
-                    "content": f"User: {userMessage[:500]}\nAI: {aiResponse[:500]}\n\nGenerate a title for this conversation:",
-                },
+                {"role": "system", "content": TITLE_SYSTEM},
+                {"role": "user", "content": titleUserPrompt(userMessage, aiResponse)},
             ]
             title = ""
             async for chunk in llmProvider._stream_response(prompt):

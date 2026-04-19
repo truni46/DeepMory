@@ -6,28 +6,14 @@ from modules.agents.service import agentService
 from modules.llm.llmProvider import llmProvider
 from modules.quota.service import quotaService
 from common.deps import getCurrentUser
+from common.prompts import CLASSIFY_SYSTEM
 from schemas import MessageRequest
 from config.logger import logger
 import json
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
-CLASSIFY_PROMPT = [
-    {
-        "role": "system",
-        "content": (
-            "You are a message router. Classify the user message as either AGENT or CHAT.\n"
-            "Reply with exactly one word: AGENT or CHAT.\n\n"
-            "AGENT — the message requires multi-step autonomous work that cannot be answered "
-            "in one pass: internet research, writing & executing code, creating a structured plan "
-            "across multiple steps, or running tests.\n"
-            "CHAT — everything else: questions about specific documents or data the user provides, "
-            "simple factual questions, greetings, explanations, summaries, translations, or any "
-            "query that can be answered with a single LLM response.\n\n"
-            "When in doubt, prefer CHAT."
-        ),
-    },
-]
+CLASSIFY_PROMPT = [{"role": "system", "content": CLASSIFY_SYSTEM}]
 
 
 async def classifyMessage(message: str) -> str:

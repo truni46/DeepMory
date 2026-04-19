@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from config.logger import logger
+from common.prompts import CONV_SUMMARY_SYSTEM, convSummaryUserPrompt
 
 
 class SummaryService:
@@ -36,26 +37,9 @@ class SummaryService:
             f"{m['role'].capitalize()}: {m['content']}" for m in turns
         )
 
-        if existingSummary:
-            user_content = (
-                f"Previous summary:\n{existingSummary}\n\n"
-                f"New conversation turns:\n{turns_text}\n\n"
-                "Update the summary to incorporate the new turns. "
-                "Keep it concise (3-5 sentences). Preserve key facts."
-            )
-        else:
-            user_content = (
-                f"Conversation:\n{turns_text}\n\n"
-                "Summarize the key points of this conversation in 3-5 sentences "
-                "so the context can be continued in future turns."
-            )
-
         return [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that summarizes conversations concisely.",
-            },
-            {"role": "user", "content": user_content},
+            {"role": "system", "content": CONV_SUMMARY_SYSTEM},
+            {"role": "user", "content": convSummaryUserPrompt(existingSummary, turns_text)},
         ]
 
 

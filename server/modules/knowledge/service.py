@@ -10,6 +10,7 @@ from config.logger import logger
 from modules.knowledge.repository import documentRepository
 from modules.rag.ragService import ragService
 from modules.llm.llmProvider import llmProvider
+from common.prompts import DOCUMENT_SUMMARY_SYSTEM, documentSummaryUserPrompt
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -150,14 +151,8 @@ class DocumentService:
                 await documentRepository.updateSummary(documentId, "failed")
                 return
             messages = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that summarizes documents concisely.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Summarize the following document in 3-5 sentences:\n\n{text}",
-                },
+                {"role": "system", "content": DOCUMENT_SUMMARY_SYSTEM},
+                {"role": "user", "content": documentSummaryUserPrompt(text)},
             ]
             response = await llmProvider.generateResponse(messages, stream=False)
             await documentRepository.updateSummary(

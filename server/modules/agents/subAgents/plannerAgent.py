@@ -11,6 +11,7 @@ from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.subAgents.agentUtils import extractConversationContext
 from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import PLANNER_TOOLS
+from common.prompts import plannerSystemPrompt
 
 _reactAgent = create_agent(deepMoryLLM, PLANNER_TOOLS)
 
@@ -43,12 +44,7 @@ async def plannerNode(state: dict) -> dict:
             startTime = time.time()
 
             inputMessages = [
-                SystemMessage(content=(
-                    "You are a Planner Agent. Create a detailed, actionable plan. "
-                    "Use createPlan tool to produce a structured plan.\n\n"
-                    f"Successful planning patterns:\n{proceduralText}"
-                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
-                )),
+                SystemMessage(content=plannerSystemPrompt(proceduralText, threadContext)),
                 *conversationMessages,
                 HumanMessage(content=(
                     f"Goal: {goal}\n\nResearch findings:\n{findingsText}\n\n"
