@@ -280,7 +280,7 @@ class SimpleRagProvider:
                 collection_name=collName,
                 points=[
                     PointStruct(
-                        id=documentId,
+                        id=str(uuid.UUID(documentId)),
                         vector=vector,
                         payload={
                             "documentId": documentId,
@@ -327,7 +327,7 @@ class SimpleRagProvider:
             collName = self._collectionName(f"doc_index_{userId}")
             await client.delete(
                 collection_name=collName,
-                points_selector=PointIdsList(points=[documentId]),
+                points_selector=PointIdsList(points=[str(uuid.UUID(documentId))]),
             )
             logger.info(f"SimpleRagProvider: deleted doc index for document {documentId}")
         except Exception as e:
