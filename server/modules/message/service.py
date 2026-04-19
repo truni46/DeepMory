@@ -39,6 +39,35 @@ class MessageService:
         return chunk, None
 
     @staticmethod
+    def _buildDocrefInstruction(sources: List[Dict]) -> str:
+        if not sources:
+            return ""
+        seen = set()
+        unique = []
+        for s in sources:
+            key = s.get("filename", "")
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(s)
+        if not unique:
+            return ""
+        lines = []
+        for s in unique:
+            docId = s.get("documentId", "")
+            filename = s.get("filename", "")
+            entry = f'- file="{filename}"' + (f' docId="{docId}"' if docId else "")
+            lines.append(entry)
+        docList = "\n".join(lines)
+        return (
+            "\n\nWhen your answer references content from a document listed below, "
+            "cite it inline using this XML tag:\n"
+            '  <docref file="filename" docId="id" page="N">cited text</docref>\n'
+            "Use page attribute only when you know the page number from the context. "
+            "Available documents:\n"
+            f"{docList}"
+        )
+
+    @staticmethod
     def buildUsageDict(content: str, model: str) -> dict:
         tokens = contextWindowManager.countTokens(content)
         logger.warning(f"[TOKEN_SOURCE: tiktoken_fallback] Provider {model} did not return usage data, counting via tiktoken")
@@ -77,6 +106,7 @@ class MessageService:
                     {
                         "filename": r.document.metadata.get("filename"),
                         "pageNumber": r.document.metadata.get("pageNumber"),
+                        "documentId": r.document.metadata.get("documentId"),
                     }
                     for r in results
                     if r.document.metadata.get("filename")
@@ -116,6 +146,19 @@ class MessageService:
             systemPrompt += f"\n\nDocument Context:\n{documentContext}"
         if memoryText:
             systemPrompt += f"\n\nKnown about this user:\n{memoryText}"
+
+        allDocMeta = [
+            {"filename": s.get("filename"), "documentId": s.get("documentId")}
+            for s in (ragSources + documentSources)
+            if s.get("filename")
+        ]
+        for d in autoDetectedDocs:
+            if d.get("filename") not in {m.get("filename") for m in allDocMeta}:
+                allDocMeta.append({"filename": d.get("filename"), "documentId": d.get("documentId")})
+
+        docrefInstruction = self._buildDocrefInstruction(allDocMeta)
+        if docrefInstruction:
+            systemPrompt += docrefInstruction
 
         messages = [{"role": "system", "content": systemPrompt}] + contextWindow + [{"role": "user", "content": content}]
 

@@ -230,6 +230,7 @@ class DocumentService:
                     {
                         "filename": r.document.metadata.get("filename"),
                         "pageNumber": r.document.metadata.get("pageNumber"),
+                        "documentId": r.document.metadata.get("documentId"),
                     }
                     for r in results
                 ]
@@ -245,7 +246,7 @@ class DocumentService:
                     text = _readTextContent(doc["filePath"], maxChars=8000)
                     if text.strip():
                         parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
-                        sources.append({"filename": doc.get("filename"), "pageNumber": None})
+                        sources.append({"filename": doc.get("filename"), "pageNumber": None, "documentId": docId})
                 except Exception as e:
                     logger.error(f"searchDocumentContext fallback failed for {docId}: {e}")
             return "\n\n".join(parts), sources
