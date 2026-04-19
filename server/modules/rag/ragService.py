@@ -125,6 +125,19 @@ class LightRagAdapter:
         except Exception as e:
             logger.error(f"LightRagAdapter.deleteMemoryVector failed memoryId={memoryId}: {e}")
 
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        logger.debug("LightRagAdapter.upsertDocumentIndex: not supported, skipping")
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        return []
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        logger.debug("LightRagAdapter.deleteDocumentIndex: not supported, skipping")
+
 
 class RagService:
     """Public facade — delegates to SimpleRagProvider or LightRagAdapter based on RAG_PROVIDER env."""
@@ -167,6 +180,19 @@ class RagService:
 
     async def deleteMemoryVector(self, userId: str, memoryId: str) -> None:
         return await self._provider.deleteMemoryVector(userId, memoryId)
+
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        return await self._provider.upsertDocumentIndex(userId, documentId, filename, summary)
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        return await self._provider.searchDocumentIndex(userId, query, limit=limit, threshold=threshold)
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        return await self._provider.deleteDocumentIndex(userId, documentId)
 
 
 ragService = RagService()
