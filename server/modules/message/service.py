@@ -85,6 +85,8 @@ class MessageService:
                 logger.warning(f"RAG search failed for project {projectId}: {e}")
 
         documentContext = ""
+        autoDetectedDocs: List[Dict] = []
+
         if documentIds:
             try:
                 documentContext, documentSources = await documentService.searchDocumentContext(
@@ -92,6 +94,17 @@ class MessageService:
                 )
             except Exception as e:
                 logger.warning(f"processMessageFlow: searchDocumentContext failed for userId {userId}: {e}")
+        else:
+            try:
+                autoDetectedDocs = await ragService.searchDocumentIndex(userId, content, limit=5, threshold=0.6)
+                if autoDetectedDocs:
+                    detectedIds = [d["documentId"] for d in autoDetectedDocs]
+                    logger.info(f"[AutoRAG] Detected {len(detectedIds)} relevant docs for user {userId}: {[d['filename'] for d in autoDetectedDocs]}")
+                    documentContext, documentSources = await documentService.searchDocumentContext(
+                        detectedIds, userId, content
+                    )
+            except Exception as e:
+                logger.warning(f"processMessageFlow: auto-detect documents failed for userId {userId}: {e}")
 
         memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
