@@ -164,6 +164,16 @@ class DocumentService:
                 documentId, "completed", summary=response
             )
             logger.info(f"_generateSummary completed for {documentId}")
+            doc = await documentRepository.getById(documentId)
+            if doc:
+                asyncio.create_task(
+                    ragService.upsertDocumentIndex(
+                        userId=doc.get("userId", ""),
+                        documentId=documentId,
+                        filename=doc.get("filename", ""),
+                        summary=response,
+                    )
+                )
         except Exception as e:
             logger.error(f"_generateSummary failed for {documentId}: {e}")
             await documentRepository.updateSummary(documentId, "failed")
@@ -257,6 +267,10 @@ class DocumentService:
             await ragService.deleteDocumentChunks(ownerId, documentId)
         except Exception as e:
             logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
+        try:
+            await ragService.deleteDocumentIndex(userId, documentId)
+        except Exception as e:
+            logger.error(f"deleteDocument doc-index cleanup failed for {documentId}: {e}")
         return True
 
 
