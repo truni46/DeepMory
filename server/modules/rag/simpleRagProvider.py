@@ -272,7 +272,7 @@ class SimpleRagProvider:
         self, userId: str, documentId: str, filename: str, summary: str
     ) -> None:
         try:
-            collName = self._collectionName(f"doc_index_{userId}")
+            collName = self._collectionName(f"docIndex_{userId}")
             await self._ensureCollection(collName)
             client = await self._getClient()
             vector = await embeddingService.embed(summary)
@@ -299,7 +299,7 @@ class SimpleRagProvider:
     ) -> List[Dict]:
         try:
             client = await self._getClient()
-            collName = self._collectionName(f"doc_index_{userId}")
+            collName = self._collectionName(f"docIndex_{userId}")
             queryVector = await embeddingService.embed(query)
             results = await client.search(
                 collection_name=collName,
@@ -324,7 +324,7 @@ class SimpleRagProvider:
     async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
         try:
             client = await self._getClient()
-            collName = self._collectionName(f"doc_index_{userId}")
+            collName = self._collectionName(f"docIndex_{userId}")
             await client.delete(
                 collection_name=collName,
                 points_selector=PointIdsList(points=[str(uuid.UUID(documentId))]),
