@@ -138,9 +138,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"project_{projectId}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
             )
@@ -158,7 +158,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -172,9 +172,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"project_{namespace}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
                 query_filter=Filter(
@@ -200,7 +200,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -235,9 +235,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"user_{userId}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
             )
@@ -250,7 +250,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -301,9 +301,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"docIndex_{userId}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
                 score_threshold=threshold,
@@ -314,7 +314,7 @@ class SimpleRagProvider:
                     "filename": r.payload.get("filename"),
                     "score": r.score,
                 }
-                for r in results
+                for r in response.points
                 if r.payload.get("documentId")
             ]
         except Exception as e:
