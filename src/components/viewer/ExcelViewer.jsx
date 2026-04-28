@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { useDelayedSpinner } from '../hooks/useDelayedSpinner';
+import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
 export default function ExcelViewer({ fileUrl }) {
     const [sheets, setSheets] = useState(null);

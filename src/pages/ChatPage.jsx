@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useToast } from '../context/ToastContext'; // DEMO - remove after testing
-import ChatMessage from '../components/ChatMessage';
-import ChatInput from '../components/ChatInput';
-import TypingIndicator from '../components/TypingIndicator';
-import AgentTaskList from '../components/AgentTaskList';
-import QuotaWidget from '../components/QuotaWidget';
-import DocumentSideViewer from '../components/DocumentSideViewer';
-import DocumentListPanel from '../components/DocumentListPanel';
+import ChatMessage from '../components/chat/ChatMessage';
+import ChatInput from '../components/chat/ChatInput';
+import TypingIndicator from '../components/chat/TypingIndicator';
+import AgentTaskList from '../components/chat/AgentTaskList';
+import DocumentSideViewer from '../components/document/DocumentSideViewer';
+import DocumentListPanel from '../components/document/DocumentListPanel';
+import Topbar from '../components/Topbar';
 import conversationService from '../services/conversationService';
 import apiService from '../services/apiService';
 import streamingService from '../services/streamingService';
@@ -27,7 +27,7 @@ const AGENT_NAME_MAP = {
 const SCROLL_THRESHOLD = 120; // px from bottom to consider "at bottom"
 
 export default function ChatPage() {
-    const { activeConversationId, setActiveConversationId, settings, loadConversations } = useOutletContext();
+    const { activeConversationId, setActiveConversationId, settings, loadConversations, conversations } = useOutletContext();
     const toast = useToast(); // DEMO - remove after testing
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
@@ -356,7 +356,7 @@ export default function ChatPage() {
         // Reset scroll position lock so new response scrolls into view
         userScrolledUp.current = false;
 
-        const docIds = selectedDocs.map(d => d.id);
+        const docIds = selectedDocs.filter(d => d.active !== false).map(d => d.id);
 
         try {
             setStreamingMessage('');
@@ -374,8 +374,6 @@ export default function ChatPage() {
                     setStreamingMessage('');
                     setIsTyping(false);
                     setIsStreaming(false);
-                    // Clear selected docs from input after chat completes
-                    setSelectedDocs([]);
 
                     if (currentId) {
                         setTimeout(() => loadConversations(), 2500);
@@ -450,32 +448,27 @@ export default function ChatPage() {
     };
 
     const handleDocumentsConfirm = (docs) => {
-        setSelectedDocs(docs);
+        setSelectedDocs(prev => {
+            const prevMap = new Map(prev.map(d => [d.id, d]));
+            return docs.map(d => prevMap.get(d.id) || { ...d, active: true });
+        });
     };
 
     const handleDocumentRemove = (docId) => {
         setSelectedDocs(prev => prev.filter(d => d.id !== docId));
     };
 
+    const handleDocumentToggle = (docId) => {
+        setSelectedDocs(prev => prev.map(d => d.id === docId ? { ...d, active: d.active === false } : d));
+    };
+
     return (
-        <div className="flex flex-col h-full w-full bg-white relative">
-            {/* Topbar */}
-            <div className="bg-white border-b border-border px-6 py-3 flex items-center justify-between shadow-sm z-20 flex-shrink-0">
-                <div className="flex items-center space-x-3">
-                    <h2 className="text-sm font-medium text-text-primary">
-                        {activeConversationId ? 'Chat' : 'New Conversation'}
-                    </h2>
-                </div>
-                <div className="flex items-center space-x-2">
-                    {/* DEMO toast buttons - remove after testing */}
-                    <button onClick={() => toast.success('Saved successfully')} className="px-2.5 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 transition-colors">Toast Success</button>
-                    <button onClick={() => toast.info('Request in progress', "We're processing your request. You'll be notified once it's done.")} className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 transition-colors">Toast Info</button>
-                    <button onClick={() => toast.error('Something went wrong', "We couldn't complete your request. Check your connection and try again.")} className="px-2.5 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 transition-colors">Toast Error</button>
-                    {quotaStatus && (
-                        <QuotaWidget quota={quotaStatus} warning={quotaWarning} inline />
-                    )}
-                </div>
-            </div>
+        <div className="flex flex-col h-full w-full bg-page relative">
+            <Topbar
+                title={activeConversationId
+                    ? (conversations?.find(c => c.id === activeConversationId)?.title || 'Chat')
+                    : 'New Conversation'}
+            />
 
             {/* Content Area (chat + optional side viewer) */}
             <div className="flex-1 flex w-full relative overflow-hidden bg-page" ref={splitPaneRef}>
@@ -485,6 +478,7 @@ export default function ChatPage() {
                     {/* Floating Document List Panel */}
                     <DocumentListPanel
                         selectedDocs={selectedDocs}
+                        onToggle={handleDocumentToggle}
                         onRemove={handleDocumentRemove}
                     />
                     <div
@@ -566,7 +560,7 @@ export default function ChatPage() {
                 {viewingDocument && (
                     <div
                         ref={viewerRef}
-                        className="h-full bg-white border-l border-border flex-shrink-0 flex flex-col overflow-hidden"
+                        className="h-full bg-page flex-shrink-0 flex flex-col overflow-hidden"
                         style={{ width: `${viewerWidth}px` }}
                     >
                         <DocumentSideViewer

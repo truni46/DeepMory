@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDelayedSpinner } from '../hooks/useDelayedSpinner';
+import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
 export default function TSVViewer({ fileUrl }) {
     const [rows, setRows] = useState(null);

@@ -132,7 +132,7 @@ export default function ChatLayout() {
     }
 
     return (
-        <div className="flex h-screen bg-white text-text-primary">
+        <div className="flex h-screen bg-page text-text-primary">
             <Sidebar
                 conversations={conversations}
                 activeConversationId={activeConversationId}
@@ -149,7 +149,8 @@ export default function ChatLayout() {
                     activeConversationId,
                     settings,
                     loadConversations,
-                    setActiveConversationId
+                    setActiveConversationId,
+                    conversations,
                 }} />
             </div>
 

@@ -5,7 +5,7 @@ import apiService from '../services/apiService';
 import memoryService from '../services/memoryService';
 import SimpleMDE from 'react-simplemde-editor';
 import 'easymde/dist/easymde.min.css';
-import ModeSelector from '../components/ModeSelector';
+import ModeSelector from '../components/chat/ModeSelector';
 import ConnectionStatus from '../components/ConnectionStatus';
 import logger from '../utils/logger';
 
