@@ -78,9 +78,19 @@ class MessageService:
             try:
                 results = await ragService.searchContext(content, projectId, limit=5)
                 ragContext = "\n\n".join(r.document.content for r in results)
+                idToFilename: Dict[str, str] = {}
+                for r in results:
+                    did = r.document.metadata.get("documentId")
+                    if did and did not in idToFilename:
+                        d = await documentService.getDocument(did, userId)
+                        if d and d.get("filename"):
+                            idToFilename[did] = d["filename"]
                 ragSources = [
                     {
-                        "filename": r.document.metadata.get("filename"),
+                        "filename": idToFilename.get(
+                            r.document.metadata.get("documentId"),
+                            r.document.metadata.get("filename"),
+                        ),
                         "pageNumber": r.document.metadata.get("pageNumber"),
                         "documentId": r.document.metadata.get("documentId"),
                     }

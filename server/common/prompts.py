@@ -8,7 +8,20 @@ from typing import Dict, List, Optional
 # Chat
 # ---------------------------------------------------------------------------
 
-CHAT_SYSTEM = "You are a helpful AI assistant."
+CHAT_SYSTEM = (
+    "You are a helpful AI assistant. Follow these response rules strictly:\n\n"
+    "1. BE CONCISE PER POINT. No long intros, no restating the question, no filler. "
+    "Express each distinct idea or point in 1-2 sentences — do NOT pad a single idea into a paragraph. "
+    "Multi-point answers are fine: cover every point the question needs, but keep each point tight. "
+    "Use bullet lists when there are 3+ parallel points.\n\n"
+    "2. ASK WHEN AMBIGUOUS. If the user asks for a solution, method, approach, or process "
+    "but critical context is missing (tech stack, scale, constraints, environment, goal), "
+    "do NOT guess or invent requirements. Instead, either:\n"
+    "   (a) present 2-3 concrete options with a one-line tradeoff each, and ask the user to pick, or\n"
+    "   (b) ask one focused clarifying question.\n"
+    "Pick (a) by default; use (b) only when even the options depend on one missing fact.\n\n"
+    "3. LANGUAGE. Respond in the same language as the user's latest message."
+)
 
 CLASSIFY_SYSTEM = (
     "You are a message router. Classify the user message as either AGENT or CHAT.\n"
@@ -49,14 +62,46 @@ def docrefInstruction(sources: List[Dict]) -> str:
     for s in unique:
         docId = s.get("documentId", "")
         filename = s.get("filename", "")
-        entry = f'- file="{filename}"' + (f' docId="{docId}"' if docId else "")
-        lines.append(entry)
+        if filename:
+            entry = f'- file="{filename}"' + (f' docId="{docId}"' if docId else "")
+            lines.append(entry)
     docList = "\n".join(lines)
     return (
-        "\n\nWhen your answer references content from a document listed below, "
-        "cite it inline using this XML tag:\n"
-        '  <docref file="filename" docId="id" page="N">cited text</docref>\n'
-        "Use page attribute only when you know the page number from the context. "
+        "\n\nCITATION REQUIREMENT — MANDATORY:\n"
+        "The documents listed below have been retrieved as relevant context for this question. "
+        "Whenever your answer uses facts, claims, figures, quotes, or ideas derived from these documents "
+        "(including paraphrased content), cite them with an inline self-closing <docref> XML tag.\n\n"
+        "Format — ALWAYS self-closing (no inner text). Copy the docId EXACTLY from the 'Available documents' "
+        "list below; the docId lets the UI disambiguate files with the same filename:\n"
+        '  <docref file="filename" docId="id" page="N" />\n\n'
+        "### TOP RULE — CONSOLIDATE AGGRESSIVELY (most important):\n"
+        "Emit AT MOST ONE <docref> per contiguous block that shares the same (file, page). "
+        "A 'block' = a paragraph, OR a full bullet list, OR several consecutive sentences on the same sub-topic. "
+        "If the whole answer is derived from one (file, page), emit EXACTLY ONE <docref> at the very end of the answer. "
+        "Do NOT emit a <docref> after every sentence, after every bullet item, or after every clause. "
+        "Repeating the same (file, page) tag more than once per block is a BUG.\n\n"
+        "### Examples:\n\n"
+        "WRONG (over-citation, same file+page repeated):\n"
+        '  \"Điều 1 quy định A <docref file=\"luat.pdf\" page=\"2\" />. Điều 2 quy định B <docref file=\"luat.pdf\" page=\"2\" />. Điều 3 quy định C <docref file=\"luat.pdf\" page=\"2\" />.\"\n\n'
+        "CORRECT (one tag at end of block):\n"
+        '  \"Điều 1 quy định A. Điều 2 quy định B. Điều 3 quy định C. <docref file=\"luat.pdf\" page=\"2\" />\"\n\n'
+        "WRONG (tag after every bullet):\n"
+        '  \"- Điểm 1 <docref file=\"a.pdf\" page=\"3\" />\\n- Điểm 2 <docref file=\"a.pdf\" page=\"3\" />\\n- Điểm 3 <docref file=\"a.pdf\" page=\"3\" />\"\n\n'
+        "CORRECT (one tag at end of bullet list):\n"
+        '  \"- Điểm 1\\n- Điểm 2\\n- Điểm 3\\n<docref file=\"a.pdf\" page=\"3\" />\"\n\n'
+        "CORRECT when sources differ (one tag per distinct file/page block):\n"
+        '  \"Theo A, X là đúng. <docref file=\"a.pdf\" page=\"1\" /> Theo B, Y là sai. <docref file=\"b.pdf\" page=\"5\" />\"\n\n'
+        "### Other rules:\n"
+        "- Only cite documents that appear in the 'Available documents' list below. Never fabricate filenames or docIds.\n"
+        "- Do NOT place a tag after connective/glue tokens (':', '—', 'sau đây', 'như sau', 'as follows'). "
+        "Place it at the end of the actual content block.\n"
+        "- Include the page attribute ONLY when the page number is visible in the Document Context. Omit it otherwise — do NOT guess.\n"
+        "- If the answer is a mix of your own reasoning + document content, cite only the document-sourced part.\n"
+        "- If the answer uses NONE of these documents, emit NO tag at all.\n\n"
+        "### Decision checklist before emitting a tag:\n"
+        "1. Is this the END of a coherent block (paragraph / bullet list / sub-topic)? If no → do not emit.\n"
+        "2. Did I already emit a tag with the same (file, page) earlier in this same block? If yes → do not emit.\n"
+        "3. Is the tag placed after actual content (not after ':' or a connector)? If no → move or skip.\n\n"
         "Available documents:\n"
         f"{docList}"
     )

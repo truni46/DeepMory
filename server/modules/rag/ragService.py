@@ -105,7 +105,7 @@ class LightRagAdapter:
             logger.error(f"LightRagAdapter.upsertMemoryVector failed for user {userId}: {e}")
 
     async def searchMemoryVectors(
-        self, userId: str, query: str, limit: int = 5
+        self, userId: str, query: str, limit: int = 5, threshold: float = 0.65
     ) -> List[SearchResult]:
         try:
             from lightrag import QueryParam
@@ -152,8 +152,11 @@ class RagService:
             self._provider = simpleRagProvider
             logger.info("RagService: using Simple RAG provider (direct Qdrant + embeddings)")
 
-    async def index(self, filePath: str, projectId: str, documentId: str, userId: str) -> int:
-        return await self._provider.index(filePath, projectId, documentId, userId)
+    async def index(self, filePath: str, projectId: str, documentId: str, userId: str, filename: Optional[str] = None) -> int:
+        try:
+            return await self._provider.index(filePath, projectId, documentId, userId, filename=filename)
+        except TypeError:
+            return await self._provider.index(filePath, projectId, documentId, userId)
 
     async def deleteDocumentChunks(self, projectId: str, documentId: str) -> None:
         return await self._provider.deleteDocumentChunks(projectId, documentId)
@@ -175,8 +178,10 @@ class RagService:
     ) -> None:
         return await self._provider.upsertMemoryVector(userId, memoryId, content, metadata)
 
-    async def searchMemoryVectors(self, userId: str, query: str, limit: int = 5) -> List[SearchResult]:
-        return await self._provider.searchMemoryVectors(userId, query, limit=limit)
+    async def searchMemoryVectors(
+        self, userId: str, query: str, limit: int = 5, threshold: float = 0.65
+    ) -> List[SearchResult]:
+        return await self._provider.searchMemoryVectors(userId, query, limit=limit, threshold=threshold)
 
     async def deleteMemoryVector(self, userId: str, memoryId: str) -> None:
         return await self._provider.deleteMemoryVector(userId, memoryId)

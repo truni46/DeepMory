@@ -126,5 +126,9 @@ xxhash==3.6.0
 yarl==1.23.0
 zstandard==0.25.0
 cohere
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==12.2.0
+paddleocr==2.8.1
 pytest==9.0.2
 pytest-asyncio==1.3.0

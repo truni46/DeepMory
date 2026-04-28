@@ -70,6 +70,7 @@ class PaddleOcrProvider:
             self._engine = PaddleOCR(
                 use_angle_cls=self._useCls,
                 lang=paddleLang,
+                use_gpu=False,
                 show_log=False,
             )
         return self._engine
@@ -88,14 +89,12 @@ class PaddleOcrProvider:
         for i, imgPath in enumerate(imagePaths):
             try:
                 ocrResult = engine.ocr(imgPath, cls=self._useCls)
-                lines = []
-                confs = []
+                lines: List[str] = []
+                confs: List[float] = []
                 if ocrResult and ocrResult[0]:
                     for line in ocrResult[0]:
-                        text = line[1][0]
-                        conf = line[1][1]
-                        lines.append(text)
-                        confs.append(conf)
+                        lines.append(line[1][0])
+                        confs.append(line[1][1])
                 avgConf = sum(confs) / len(confs) if confs else 0.0
                 results.append(OcrPage(
                     text="\n".join(lines),
@@ -113,7 +112,7 @@ class PaddleOcrProvider:
 
 
 class PaddleVLOcrProvider(PaddleOcrProvider):
-    """PaddleOCR with angle classification and PP-OCRv4 for layout-aware recognition."""
+    """PaddleOCR with angle classification for layout-aware recognition."""
 
     def __init__(self):
         super().__init__(useCls=True)
@@ -125,14 +124,175 @@ class PaddleVLOcrProvider(PaddleOcrProvider):
             self._engine = PaddleOCR(
                 use_angle_cls=True,
                 lang=paddleLang,
+                use_gpu=False,
                 show_log=False,
-                ocr_version="PP-OCRv4",
             )
         return self._engine
 
     @property
     def providerName(self) -> str:
         return "paddle-vl"
+
+
+class PaddleVLCloudOcrProvider:
+    """PaddleOCR-VL via Baidu AI Studio official API (layout-parsing endpoint).
+
+    Get API_URL and ACCESS_TOKEN from https://aistudio.baidu.com/paddleocr/task
+    (click "API" button next to the PaddleOCR-VL / PaddleOCR-VL-1.5 model).
+
+    Env vars:
+      PADDLEOCR_VL_API_URL       — full endpoint URL, e.g. https://xxxxxx.aistudio-app.com/layout-parsing (required)
+      PADDLEOCR_VL_ACCESS_TOKEN  — access token from https://aistudio.baidu.com/index/accessToken (required)
+      PADDLEOCR_VL_TIMEOUT       — request timeout in seconds, default 180
+      PADDLEOCR_VL_PRETTIFY      — prettifyMarkdown, default true
+
+    Backwards-compatible aliases (still honored):
+      PADDLEOCR_VL_API_KEY  → PADDLEOCR_VL_ACCESS_TOKEN
+      PADDLEOCR_VL_BASE_URL → PADDLEOCR_VL_API_URL
+    """
+
+    def __init__(self):
+        self._apiUrl = os.getenv("PADDLEOCR_VL_API_URL") or os.getenv("PADDLEOCR_VL_BASE_URL", "")
+        self._token = os.getenv("PADDLEOCR_VL_ACCESS_TOKEN") or os.getenv("PADDLEOCR_VL_API_KEY", "")
+        self._timeout = float(os.getenv("PADDLEOCR_VL_TIMEOUT", "180"))
+        self._prettify = os.getenv("PADDLEOCR_VL_PRETTIFY", "true").lower() == "true"
+        if not self._apiUrl or not self._token:
+            logger.warning(
+                "PaddleVLCloudOcrProvider: missing PADDLEOCR_VL_API_URL or PADDLEOCR_VL_ACCESS_TOKEN; "
+                "calls will fail until configured"
+            )
+
+    def _encodeFile(self, filePath: str) -> str:
+        import base64
+        with open(filePath, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+
+    def _callApi(self, filePath: str, fileType: int) -> dict:
+        import httpx
+        headers = {
+            "Authorization": f"token {self._token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "file": self._encodeFile(filePath),
+            "fileType": fileType,
+            "prettifyMarkdown": self._prettify,
+        }
+        with httpx.Client(timeout=self._timeout) as client:
+            resp = client.post(self._apiUrl, json=payload, headers=headers)
+            resp.raise_for_status()
+            body = resp.json()
+        if body.get("errorCode", 0) != 0:
+            raise RuntimeError(f"PaddleOCR-VL API error {body.get('errorCode')}: {body.get('errorMsg')}")
+        return body.get("result", {})
+
+    def _extractPages(self, result: dict) -> List[OcrPage]:
+        parsed = result.get("layoutParsingResults", []) or []
+        pages: List[OcrPage] = []
+        for i, item in enumerate(parsed):
+            md = (item or {}).get("markdown") or {}
+            text = md.get("text", "") if isinstance(md, dict) else ""
+            pages.append(OcrPage(text=(text or "").strip(), pageNumber=i + 1, confidence=None))
+        return pages
+
+    def ocrImages(self, imagePaths: List[str], lang: str) -> List[OcrPage]:
+        results: List[OcrPage] = []
+        for i, imgPath in enumerate(imagePaths):
+            try:
+                result = self._callApi(imgPath, fileType=1)
+                pages = self._extractPages(result)
+                text = "\n\n".join(p.text for p in pages if p.text)
+                results.append(OcrPage(text=text, pageNumber=i + 1, confidence=None))
+            except Exception as e:
+                logger.error(f"PaddleVLCloudOcrProvider.ocrImages failed on page {i + 1}: {e}")
+                results.append(OcrPage(text="", pageNumber=i + 1, confidence=0.0))
+        return results
+
+    def ocrPdf(self, pdfPath: str) -> List[OcrPage]:
+        """Send the whole PDF in one request (server-side layout parses all pages)."""
+        try:
+            result = self._callApi(pdfPath, fileType=0)
+            return self._extractPages(result)
+        except Exception as e:
+            logger.error(f"PaddleVLCloudOcrProvider.ocrPdf failed: {e}")
+            return []
+
+    @property
+    def providerName(self) -> str:
+        return "paddle-vl-cloud"
+
+
+class VisionLLMOcrProvider:
+    """OCR via Vision LLM API (Gemini or OpenAI). Set OCR_VISION_MODEL env to override model."""
+
+    _PROMPT = (
+        "Extract all text from this document image exactly as it appears. "
+        "Preserve line breaks and paragraph structure. "
+        "Return only the extracted text, no commentary."
+    )
+
+    def __init__(self):
+        self._backend = os.getenv("OCR_VISION_BACKEND", "gemini").lower()
+        self._model = os.getenv("OCR_VISION_MODEL", "")
+
+    def _encodeImage(self, imagePath: str) -> tuple[str, str]:
+        import base64, mimetypes
+        mime = mimetypes.guess_type(imagePath)[0] or "image/png"
+        with open(imagePath, "rb") as f:
+            data = base64.b64encode(f.read()).decode("utf-8")
+        return mime, data
+
+    def _ocrWithGemini(self, imagePath: str) -> str:
+        import base64
+        from google import genai
+        from google.genai import types
+        model = self._model or "gemini-2.0-flash"
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        mime, data = self._encodeImage(imagePath)
+        response = client.models.generate_content(
+            model=model,
+            contents=[
+                types.Part.from_bytes(data=base64.b64decode(data), mime_type=mime),
+                self._PROMPT,
+            ],
+        )
+        return response.text or ""
+
+    def _ocrWithOpenAI(self, imagePath: str) -> str:
+        from openai import OpenAI
+        model = self._model or "gpt-4o-mini"
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        mime, data = self._encodeImage(imagePath)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}},
+                    {"type": "text", "text": self._PROMPT},
+                ],
+            }],
+            max_tokens=4096,
+        )
+        return response.choices[0].message.content or ""
+
+    def ocrImages(self, imagePaths: List[str], lang: str) -> List[OcrPage]:
+        results: List[OcrPage] = []
+        for i, imgPath in enumerate(imagePaths):
+            try:
+                if self._backend == "openai":
+                    text = self._ocrWithOpenAI(imgPath)
+                else:
+                    text = self._ocrWithGemini(imgPath)
+                results.append(OcrPage(text=text.strip(), pageNumber=i + 1, confidence=None))
+            except Exception as e:
+                logger.error(f"VisionLLMOcrProvider.ocrImages failed on page {i + 1}: {e}")
+                results.append(OcrPage(text="", pageNumber=i + 1, confidence=0.0))
+        return results
+
+    @property
+    def providerName(self) -> str:
+        return f"vision-{self._backend}"
 
 
 def _pdfToImages(pdfPath: str, outputDir: str) -> List[str]:
@@ -177,7 +337,7 @@ class OCRService:
     """ServiceWrapper — reads env, builds provider, exposes convenience methods."""
 
     def __init__(self):
-        self._providerName = os.getenv("OCR_PROVIDER", "tesseract").lower()
+        self._providerName = os.getenv("OCR_PROVIDER", "paddle").lower()
         self._lang = os.getenv("OCR_LANG", "vie+eng")
         self._provider: Optional[OcrProvider] = None
         logger.info(f"OCRService initialized: provider={self._providerName} lang={self._lang}")
@@ -190,7 +350,17 @@ class OCRService:
                 elif self._providerName == "paddle":
                     self._provider = PaddleOcrProvider()
                 elif self._providerName == "paddle-vl":
-                    self._provider = PaddleVLOcrProvider()
+                    hasToken = os.getenv("PADDLEOCR_VL_ACCESS_TOKEN") or os.getenv("PADDLEOCR_VL_API_KEY")
+                    hasUrl = os.getenv("PADDLEOCR_VL_API_URL") or os.getenv("PADDLEOCR_VL_BASE_URL")
+                    if hasToken and hasUrl:
+                        logger.info("paddle-vl: routing to AI Studio cloud API")
+                        self._provider = PaddleVLCloudOcrProvider()
+                    else:
+                        self._provider = PaddleVLOcrProvider()
+                elif self._providerName in ("paddle-vl-cloud", "paddleocr-vl", "paddleocr-vl-cloud"):
+                    self._provider = PaddleVLCloudOcrProvider()
+                elif self._providerName in ("vision", "vision-gemini", "vision-openai"):
+                    self._provider = VisionLLMOcrProvider()
                 else:
                     logger.warning(f"Unknown OCR provider '{self._providerName}', falling back to Tesseract")
                     self._provider = TesseractOcrProvider()
@@ -207,6 +377,11 @@ class OCRService:
         provider = self._getProvider()
 
         if ext == ".pdf":
+            if hasattr(provider, "ocrPdf"):
+                pages = provider.ocrPdf(filePath)
+                if pages:
+                    return pages
+                logger.warning("provider.ocrPdf returned no pages; falling back to per-page image OCR")
             with tempfile.TemporaryDirectory() as tmpDir:
                 imagePaths = _pdfToImages(filePath, tmpDir)
                 return provider.ocrImages(imagePaths, lang)
