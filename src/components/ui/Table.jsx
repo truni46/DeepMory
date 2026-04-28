@@ -4,13 +4,13 @@ import React from 'react';
 export default function Table({ headers = [], children, className = '' }) {
     return (
         <div className={`overflow-x-auto w-full ${className}`}>
-            <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-50 text-text-secondary text-xs font-medium uppercase tracking-wide border-b border-border-color">
+            <table className="w-full text-left border-separate border-spacing-0">
+                <thead className="text-text-secondary text-sm font-medium tracking-wide">
                     <tr>
                         {headers.map((header, index) => (
-                            <th 
-                                key={index} 
-                                className={`px-6 py-3 whitespace-nowrap ${index === headers.length - 1 ? 'text-right' : ''}`}
+                            <th
+                                key={index}
+                                className={`py-3 whitespace-nowrap bg-primary text-white border-b border-border-color ${index === 0 && typeof header !== 'string' ? 'w-12 px-3' : 'px-6'} ${index === headers.length - 1 ? 'text-right' : ''} ${index === 0 ? 'rounded-tl-xl' : ''} ${index === headers.length - 1 ? 'rounded-tr-xl' : ''}`}
                             >
                                 {header}
                             </th>

@@ -157,6 +157,36 @@ class DocumentRepository:
                 data[documentId]["updatedAt"] = now.isoformat()
                 db.write_json("documents", data)
 
+    async def updateOcr(
+        self,
+        documentId: str,
+        ocrStatus: str,
+        ocrFilePath: str = None,
+        isScanned: bool = None,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE documents SET
+                        "ocrStatus" = $1,
+                        "ocrFilePath" = COALESCE($2, "ocrFilePath"),
+                        "isScanned" = COALESCE($3, "isScanned"),
+                        "updatedAt" = $4
+                    WHERE id = $5""",
+                    ocrStatus, ocrFilePath, isScanned, now, documentId,
+                )
+        else:
+            data = db.read_json("documents")
+            if documentId in data:
+                data[documentId]["ocrStatus"] = ocrStatus
+                if ocrFilePath is not None:
+                    data[documentId]["ocrFilePath"] = ocrFilePath
+                if isScanned is not None:
+                    data[documentId]["isScanned"] = isScanned
+                data[documentId]["updatedAt"] = now.isoformat()
+                db.write_json("documents", data)
+
     async def delete(self, documentId: str, userId: str) -> Optional[Tuple[str, str]]:
         """Returns (filePath, ownerId) if deleted, None if not found/unauthorized."""
         if db.useDatabase and db.pool:

@@ -13,6 +13,7 @@ from modules.settings.service import settingsService
 from modules.conversations.service import conversationService
 from modules.quota.service import quotaService
 from modules.memory.shortTerm.contextWindowManager import contextWindowManager
+from common.prompts import CHAT_SYSTEM, TITLE_SYSTEM, titleUserPrompt, docrefInstruction
 from config.logger import logger
 
 
@@ -37,6 +38,10 @@ class MessageService:
             cleanChunk = chunk[:chunk.index("\n__USAGE__")] if "\n__USAGE__" in chunk else ""
             return cleanChunk, json.loads(usageJson)
         return chunk, None
+
+    @staticmethod
+    def _buildDocrefInstruction(sources: List[Dict]) -> str:
+        return docrefInstruction(sources)
 
     @staticmethod
     def buildUsageDict(content: str, model: str) -> dict:
@@ -73,10 +78,21 @@ class MessageService:
             try:
                 results = await ragService.searchContext(content, projectId, limit=5)
                 ragContext = "\n\n".join(r.document.content for r in results)
+                idToFilename: Dict[str, str] = {}
+                for r in results:
+                    did = r.document.metadata.get("documentId")
+                    if did and did not in idToFilename:
+                        d = await documentService.getDocument(did, userId)
+                        if d and d.get("filename"):
+                            idToFilename[did] = d["filename"]
                 ragSources = [
                     {
-                        "filename": r.document.metadata.get("filename"),
+                        "filename": idToFilename.get(
+                            r.document.metadata.get("documentId"),
+                            r.document.metadata.get("filename"),
+                        ),
                         "pageNumber": r.document.metadata.get("pageNumber"),
+                        "documentId": r.document.metadata.get("documentId"),
                     }
                     for r in results
                     if r.document.metadata.get("filename")
@@ -85,6 +101,8 @@ class MessageService:
                 logger.warning(f"RAG search failed for project {projectId}: {e}")
 
         documentContext = ""
+        autoDetectedDocs: List[Dict] = []
+
         if documentIds:
             try:
                 documentContext, documentSources = await documentService.searchDocumentContext(
@@ -92,17 +110,41 @@ class MessageService:
                 )
             except Exception as e:
                 logger.warning(f"processMessageFlow: searchDocumentContext failed for userId {userId}: {e}")
+        else:
+            try:
+                autoDetectedDocs = await ragService.searchDocumentIndex(userId, content, limit=5, threshold=0.6)
+                if autoDetectedDocs:
+                    detectedIds = [d["documentId"] for d in autoDetectedDocs]
+                    logger.info(f"[AutoRAG] Detected {len(detectedIds)} relevant docs for user {userId}: {[d['filename'] for d in autoDetectedDocs]}")
+                    documentContext, documentSources = await documentService.searchDocumentContext(
+                        detectedIds, userId, content
+                    )
+            except Exception as e:
+                logger.warning(f"processMessageFlow: auto-detect documents failed for userId {userId}: {e}")
 
         memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
 
-        systemPrompt = "You are a helpful AI assistant."
+        systemPrompt = CHAT_SYSTEM
         if ragContext:
             systemPrompt += f"\n\nRelevant Context:\n{ragContext}"
         if documentContext:
             systemPrompt += f"\n\nDocument Context:\n{documentContext}"
         if memoryText:
             systemPrompt += f"\n\nKnown about this user:\n{memoryText}"
+
+        allDocMeta = [
+            {"filename": s.get("filename"), "documentId": s.get("documentId")}
+            for s in (ragSources + documentSources)
+            if s.get("filename")
+        ]
+        for d in autoDetectedDocs:
+            if d.get("filename") not in {m.get("filename") for m in allDocMeta}:
+                allDocMeta.append({"filename": d.get("filename"), "documentId": d.get("documentId")})
+
+        docrefInstruction = self._buildDocrefInstruction(allDocMeta)
+        if docrefInstruction:
+            systemPrompt += docrefInstruction
 
         messages = [{"role": "system", "content": systemPrompt}] + contextWindow + [{"role": "user", "content": content}]
 
@@ -146,6 +188,9 @@ class MessageService:
         yield f"\n__QUOTA__{json.dumps(quotaStatus)}__QUOTA__"
 
         allSources = [s for s in (ragSources + documentSources) if s.get("filename")]
+        for d in autoDetectedDocs:
+            if d.get("filename") not in {s.get("filename") for s in allSources}:
+                allSources.append({"filename": d.get("filename"), "documentId": d.get("documentId"), "pageNumber": None})
         if allSources:
             yield f"\n__SOURCES__{json.dumps(allSources)}__SOURCES__"
 
@@ -211,14 +256,8 @@ class MessageService:
         try:
             logger.info(f"Generating title for conversation {conversationId}")
             prompt = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that generates short, concise titles for conversations. Max 6 words. No quotes. No prefixes like 'Title:'.",
-                },
-                {
-                    "role": "user",
-                    "content": f"User: {userMessage[:500]}\nAI: {aiResponse[:500]}\n\nGenerate a title for this conversation:",
-                },
+                {"role": "system", "content": TITLE_SYSTEM},
+                {"role": "user", "content": titleUserPrompt(userMessage, aiResponse)},
             ]
             title = ""
             async for chunk in llmProvider._stream_response(prompt):

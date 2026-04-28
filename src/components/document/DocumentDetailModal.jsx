@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiX, FiFileText, FiCalendar, FiBookOpen, FiDownload, FiZoomIn, FiZoomOut } from 'react-icons/fi';
-import documentService from '../services/documentService';
-import PDFViewer from './PDFViewer';
-import WordViewer from './WordViewer';
-import ExcelViewer from './ExcelViewer';
-import TextViewer from './TextViewer';
-import TSVViewer from './TSVViewer';
-import MarkdownViewer from './MarkdownViewer';
+import documentService from '../../services/documentService';
+import PDFViewer from '../viewer/PDFViewer';
+import WordViewer from '../viewer/WordViewer';
+import ExcelViewer from '../viewer/ExcelViewer';
+import TextViewer from '../viewer/TextViewer';
+import TSVViewer from '../viewer/TSVViewer';
+import MarkdownViewer from '../viewer/MarkdownViewer';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
 function formatDate(dateStr) {
@@ -46,12 +46,12 @@ export default function DocumentDetailModal({ document, onClose }) {
     }, [document.id]);
 
     return (
-        <div 
+        <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 pl-64"
             onClick={onClose}
             style={{ marginTop: '0px' }}
         >
-            <div 
+            <div
                 className="bg-white rounded-xl shadow-2xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >

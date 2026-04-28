@@ -1,3 +1,4 @@
+import io
 import logging
 import sys
 from pathlib import Path
@@ -85,9 +86,9 @@ def setup_logger():
     )
     
     # Force UTF-8 on Windows console (prevents cp1252 UnicodeEncodeError for non-ASCII text)
-    if hasattr(sys.stdout, 'reconfigure'):
+    if sys.platform == 'win32' and hasattr(sys.stdout, 'buffer'):
         try:
-            sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
         except Exception:
             pass
     console_handler = logging.StreamHandler(sys.stdout)
@@ -99,7 +100,8 @@ def setup_logger():
     combined_handler = RotatingFileHandler(
         LOGS_DIR / 'combined.log',
         maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        backupCount=5,
+        encoding='utf-8'
     )
     combined_handler.setLevel(logging.DEBUG)
     combined_handler.setFormatter(detailed_formatter)
@@ -109,7 +111,8 @@ def setup_logger():
     error_handler = RotatingFileHandler(
         LOGS_DIR / 'error.log',
         maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        backupCount=5,
+        encoding='utf-8'
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(detailed_formatter)
@@ -119,7 +122,8 @@ def setup_logger():
     chat_handler = RotatingFileHandler(
         LOGS_DIR / 'chat.log',
         maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        backupCount=5,
+        encoding='utf-8'
     )
     chat_handler.setLevel(CHAT_LEVEL)
     chat_handler.addFilter(lambda record: record.levelno == CHAT_LEVEL)
@@ -130,7 +134,8 @@ def setup_logger():
     api_handler = RotatingFileHandler(
         LOGS_DIR / 'api.log',
         maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        backupCount=5,
+        encoding='utf-8'
     )
     api_handler.setLevel(API_LEVEL)
     api_handler.addFilter(lambda record: record.levelno == API_LEVEL)
@@ -141,7 +146,8 @@ def setup_logger():
     conn_handler = RotatingFileHandler(
         LOGS_DIR / 'connection.log',
         maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        backupCount=5,
+        encoding='utf-8'
     )
     conn_handler.setLevel(CONN_LEVEL)
     conn_handler.addFilter(lambda record: record.levelno == CONN_LEVEL)

@@ -11,6 +11,7 @@ from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
 from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import RESEARCH_TOOLS
+from common.prompts import researchSystemPrompt
 
 _reactAgent = create_agent(deepMoryLLM, RESEARCH_TOOLS)
 
@@ -41,13 +42,7 @@ async def researchNode(state: dict) -> dict:
             startTime = time.time()
 
             inputMessages = [
-                SystemMessage(content=(
-                    "You are a Research Agent. Use available tools to search the web and "
-                    "internal knowledge base. Synthesize findings into clear, structured points.\n\n"
-                    f"Past research experience:\n{episodicText}\n\n"
-                    f"Relevant knowledge:\n{semanticText}"
-                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
-                )),
+                SystemMessage(content=researchSystemPrompt(episodicText, semanticText, threadContext)),
                 *conversationMessages,
                 HumanMessage(content=f"Execute this research task: {task['description']}"),
             ]

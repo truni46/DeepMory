@@ -66,58 +66,80 @@ export default function QuotaWidget({ quota, warning, inline = false }) {
     const maxPercent = Math.max(quota.session?.percent || 0, quota.weekly?.percent || 0);
     const color = getColor(maxPercent);
     const isBlocked = !quota.allowed;
+    const remainingPercent = 1 - maxPercent;
+    const ringColor = remainingPercent <= 0.2 ? '#f97316' : '#16a34a';
+    const r = 11;
+    const circumference = 2 * Math.PI * r;
+    const remainingDash = circumference * Math.max(remainingPercent, 0);
 
-    return (
-        <div className={inline ? 'relative flex-shrink-0 bg-white border-2 border-green-600 rounded-full' : 'fixed bottom-24 right-6 z-50'} ref={panelRef} style={{ padding: '7px' }}>
-            {expanded && (
-                <div className={`absolute ${inline ? 'top-full mt-2 slide-in-from-top-2 z-50' : 'bottom-full mb-2 slide-in-from-bottom-2'} right-0 bg-white border border-border rounded-xl shadow-xl p-4 w-72 animate-in fade-in duration-200`}>
-                    <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-text-primary">Token Usage</h4>
-                        {isBlocked && (
-                            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                QUOTA EXCEEDED
-                            </span>
-                        )}
-                    </div>
-                    <ProgressBar
-                        label="Session"
-                        used={quota.session?.used || 0}
-                        limit={quota.session?.limit || 1}
-                        percent={quota.session?.percent || 0}
-                        extra={`${formatTime(quota.session?.remainingSeconds || 0)} remaining`}
-                    />
-                    <ProgressBar
-                        label="Weekly"
-                        used={quota.weekly?.used || 0}
-                        limit={quota.weekly?.limit || 1}
-                        percent={quota.weekly?.percent || 0}
-                        extra={`Resets ${quota.weekly?.resetDay || 'Mon'}`}
-                    />
-                </div>
-            )}
+    const expandedPanel = expanded && (
+        <div className="absolute bottom-full mb-2 right-0 bg-white border border-border rounded-xl shadow-xl p-4 w-72 animate-in fade-in duration-200 z-50">
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-text-primary">Token Usage</h4>
+                {isBlocked && (
+                    <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                        QUOTA EXCEEDED
+                    </span>
+                )}
+            </div>
+            <ProgressBar
+                label="Session"
+                used={quota.session?.used || 0}
+                limit={quota.session?.limit || 1}
+                percent={quota.session?.percent || 0}
+                extra={`${formatTime(quota.session?.remainingSeconds || 0)} remaining`}
+            />
+            <ProgressBar
+                label="Weekly"
+                used={quota.weekly?.used || 0}
+                limit={quota.weekly?.limit || 1}
+                percent={quota.weekly?.percent || 0}
+                extra={`Resets ${quota.weekly?.resetDay || 'Mon'}`}
+            />
+        </div>
+    );
 
-            {inline ? (
+    if (inline) {
+        return (
+            <div className="relative flex-shrink-0" ref={panelRef}>
+                {expandedPanel}
                 <button
                     onClick={() => setExpanded(!expanded)}
-                    className={`flex items-center justify-center p-2 rounded-full transition-colors hover:bg-bg-secondary ${warning ? 'animate-pulse' : ''}`}
-            title="Token quota"
-                    style={{padding: '2px'}}
+                    title="Token quota"
+                    className={`relative flex items-center justify-center w-7 h-7 ${warning ? 'animate-pulse' : ''}`}
                 >
-            <svg className={`w-5 h-5 ${color.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-        </button>
-    ) : (
-        <button
-            onClick={() => setExpanded(!expanded)}
-            className={`ml-auto flex items-center justify-center w-10 h-10 rounded-full shadow-lg border-2 border-white transition-all duration-300 ${color.bg} ${warning ? 'animate-pulse' : ''} hover:scale-110`}
-title = "Token quota"
-    >
-    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-                </button >
-            )}
-        </div >
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 28 28">
+                        <circle cx="14" cy="14" r={r} fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
+                        <circle
+                            cx="14" cy="14" r={r}
+                            fill="none"
+                            stroke={ringColor}
+                            strokeWidth="2.5"
+                            strokeDasharray={`${remainingDash} ${circumference}`}
+                            strokeLinecap="round"
+                            transform="rotate(-90 14 14)"
+                        />
+                    </svg>
+                    <svg className="relative w-3 h-3" fill="none" stroke={ringColor} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed bottom-24 right-6 z-50" ref={panelRef}>
+            {expandedPanel}
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className={`ml-auto flex items-center justify-center w-10 h-10 rounded-full shadow-lg border-2 border-white transition-all duration-300 ${color.bg} ${warning ? 'animate-pulse' : ''} hover:scale-110`}
+                title="Token quota"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </button>
+        </div>
     );
 }

@@ -76,7 +76,7 @@ class SimpleRagProvider:
             )
             logger.info(f"SimpleRagProvider: created collection '{name}'")
 
-    async def index(self, filePath: str, projectId: str, documentId: str, userId: str) -> int:
+    async def index(self, filePath: str, projectId: str, documentId: str, userId: str, filename: Optional[str] = None) -> int:
         try:
             pages = documentParserService.parse(filePath)
             if not pages:
@@ -91,7 +91,7 @@ class SimpleRagProvider:
             collName = self._collectionName(f"project_{projectId}")
             await self._ensureCollection(collName)
             client = await self._getClient()
-            filename = os.path.basename(filePath)
+            filename = filename or os.path.basename(filePath)
             points = [
                 PointStruct(
                     id=str(uuid.uuid4()),
@@ -138,9 +138,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"project_{projectId}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
             )
@@ -158,7 +158,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -172,9 +172,9 @@ class SimpleRagProvider:
             client = await self._getClient()
             collName = self._collectionName(f"project_{namespace}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
                 query_filter=Filter(
@@ -200,7 +200,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -229,17 +229,18 @@ class SimpleRagProvider:
             logger.error(f"SimpleRagProvider.upsertMemoryVector failed for user {userId}: {e}")
 
     async def searchMemoryVectors(
-        self, userId: str, query: str, limit: int = 5
+        self, userId: str, query: str, limit: int = 5, threshold: float = 0.65
     ) -> List[SearchResult]:
         try:
             client = await self._getClient()
             collName = self._collectionName(f"user_{userId}")
             queryVector = await embeddingService.embed(query)
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=collName,
-                query_vector=queryVector,
+                query=queryVector,
                 limit=limit,
                 with_payload=True,
+                score_threshold=threshold,
             )
             return [
                 SearchResult(
@@ -250,7 +251,7 @@ class SimpleRagProvider:
                     ),
                     score=r.score,
                 )
-                for r in results
+                for r in response.points
                 if r.payload.get("text")
             ]
         except Exception as e:
@@ -267,6 +268,71 @@ class SimpleRagProvider:
             )
         except Exception as e:
             logger.error(f"SimpleRagProvider.deleteMemoryVector failed memoryId={memoryId}: {e}")
+
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        try:
+            collName = self._collectionName(f"docIndex_{userId}")
+            await self._ensureCollection(collName)
+            client = await self._getClient()
+            vector = await embeddingService.embed(summary)
+            await client.upsert(
+                collection_name=collName,
+                points=[
+                    PointStruct(
+                        id=str(uuid.UUID(str(documentId))),
+                        vector=vector,
+                        payload={
+                            "documentId": documentId,
+                            "filename": filename,
+                            "userId": userId,
+                        },
+                    )
+                ],
+            )
+            logger.info(f"SimpleRagProvider: upserted doc index for document {documentId}")
+        except Exception as e:
+            logger.error(f"SimpleRagProvider.upsertDocumentIndex failed for document {documentId}: {e}")
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        try:
+            client = await self._getClient()
+            collName = self._collectionName(f"docIndex_{userId}")
+            queryVector = await embeddingService.embed(query)
+            response = await client.query_points(
+                collection_name=collName,
+                query=queryVector,
+                limit=limit,
+                with_payload=True,
+                score_threshold=threshold,
+            )
+            return [
+                {
+                    "documentId": r.payload.get("documentId"),
+                    "filename": r.payload.get("filename"),
+                    "score": r.score,
+                }
+                for r in response.points
+                if r.payload.get("documentId")
+            ]
+        except Exception as e:
+            logger.debug(f"SimpleRagProvider.searchDocumentIndex failed for user {userId}: {e}")
+            return []
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        try:
+            client = await self._getClient()
+            collName = self._collectionName(f"docIndex_{userId}")
+            await client.delete(
+                collection_name=collName,
+                points_selector=PointIdsList(points=[str(uuid.UUID(str(documentId)))]),
+            )
+            logger.info(f"SimpleRagProvider: deleted doc index for document {documentId}")
+        except Exception as e:
+            logger.error(f"SimpleRagProvider.deleteDocumentIndex failed for document {documentId}: {e}")
 
 
 simpleRagProvider = SimpleRagProvider()

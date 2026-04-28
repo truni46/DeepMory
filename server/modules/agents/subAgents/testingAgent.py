@@ -11,6 +11,7 @@ from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
 from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import TESTING_TOOLS
+from common.prompts import testingSystemPrompt
 
 _reactAgent = create_agent(deepMoryLLM, TESTING_TOOLS)
 
@@ -42,13 +43,7 @@ async def testingNode(state: dict) -> dict:
             startTime = time.time()
 
             inputMessages = [
-                SystemMessage(content=(
-                    "You are a Testing Agent. Validate the implementation against the goal. "
-                    "Use testCaseGenerator to create tests, testRunner to run them, "
-                    "validator to check outputs.\n\n"
-                    f"Common failure patterns:\n{episodicText}"
-                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
-                )),
+                SystemMessage(content=testingSystemPrompt(episodicText, threadContext)),
                 *conversationMessages,
                 HumanMessage(content=(
                     f"Goal: {goal}\nImplementation: {implementation.get('output', 'No output')[:200]}\n\n"

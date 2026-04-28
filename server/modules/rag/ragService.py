@@ -105,7 +105,7 @@ class LightRagAdapter:
             logger.error(f"LightRagAdapter.upsertMemoryVector failed for user {userId}: {e}")
 
     async def searchMemoryVectors(
-        self, userId: str, query: str, limit: int = 5
+        self, userId: str, query: str, limit: int = 5, threshold: float = 0.65
     ) -> List[SearchResult]:
         try:
             from lightrag import QueryParam
@@ -125,6 +125,19 @@ class LightRagAdapter:
         except Exception as e:
             logger.error(f"LightRagAdapter.deleteMemoryVector failed memoryId={memoryId}: {e}")
 
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        logger.debug("LightRagAdapter.upsertDocumentIndex: not supported, skipping")
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        return []
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        logger.debug("LightRagAdapter.deleteDocumentIndex: not supported, skipping")
+
 
 class RagService:
     """Public facade — delegates to SimpleRagProvider or LightRagAdapter based on RAG_PROVIDER env."""
@@ -139,8 +152,11 @@ class RagService:
             self._provider = simpleRagProvider
             logger.info("RagService: using Simple RAG provider (direct Qdrant + embeddings)")
 
-    async def index(self, filePath: str, projectId: str, documentId: str, userId: str) -> int:
-        return await self._provider.index(filePath, projectId, documentId, userId)
+    async def index(self, filePath: str, projectId: str, documentId: str, userId: str, filename: Optional[str] = None) -> int:
+        try:
+            return await self._provider.index(filePath, projectId, documentId, userId, filename=filename)
+        except TypeError:
+            return await self._provider.index(filePath, projectId, documentId, userId)
 
     async def deleteDocumentChunks(self, projectId: str, documentId: str) -> None:
         return await self._provider.deleteDocumentChunks(projectId, documentId)
@@ -162,11 +178,26 @@ class RagService:
     ) -> None:
         return await self._provider.upsertMemoryVector(userId, memoryId, content, metadata)
 
-    async def searchMemoryVectors(self, userId: str, query: str, limit: int = 5) -> List[SearchResult]:
-        return await self._provider.searchMemoryVectors(userId, query, limit=limit)
+    async def searchMemoryVectors(
+        self, userId: str, query: str, limit: int = 5, threshold: float = 0.65
+    ) -> List[SearchResult]:
+        return await self._provider.searchMemoryVectors(userId, query, limit=limit, threshold=threshold)
 
     async def deleteMemoryVector(self, userId: str, memoryId: str) -> None:
         return await self._provider.deleteMemoryVector(userId, memoryId)
+
+    async def upsertDocumentIndex(
+        self, userId: str, documentId: str, filename: str, summary: str
+    ) -> None:
+        return await self._provider.upsertDocumentIndex(userId, documentId, filename, summary)
+
+    async def searchDocumentIndex(
+        self, userId: str, query: str, limit: int = 10, threshold: float = 0.6
+    ) -> List[Dict]:
+        return await self._provider.searchDocumentIndex(userId, query, limit=limit, threshold=threshold)
+
+    async def deleteDocumentIndex(self, userId: str, documentId: str) -> None:
+        return await self._provider.deleteDocumentIndex(userId, documentId)
 
 
 ragService = RagService()

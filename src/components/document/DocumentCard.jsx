@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
 import { HiTrash } from 'react-icons/hi2';
 import DocumentStatusBadge from './DocumentStatusBadge';
-import { TableRow, TableCell } from './ui/Table';
+import { TableRow, TableCell } from '../ui/Table';
 
 function formatFileSize(bytes) {
     if (!bytes) return '—';
@@ -12,7 +12,7 @@ function formatFileSize(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DocumentCard({ document, onView, onDelete }) {
+export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete }) {
     const [hovered, setHovered] = useState(false);
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
@@ -20,6 +20,17 @@ export default function DocumentCard({ document, onView, onDelete }) {
 
     return (
         <TableRow onClick={() => onView(document)}>
+            <TableCell>
+                <div className="flex items-center justify-center">
+                    <input
+                        type="checkbox"
+                        checked={!!selected}
+                        onChange={e => { e.stopPropagation(); onToggleSelect(); }}
+                        onClick={e => e.stopPropagation()}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                </div>
+            </TableCell>
             <TableCell>
                 <div className="flex items-center gap-3">
                     <span
@@ -52,7 +63,7 @@ export default function DocumentCard({ document, onView, onDelete }) {
                         title="Delete"
                     >
                         {hovered
-                            ? <HiTrash size={16} className="text-red-400" />
+                            ? <HiTrash size={16} className="text-red-700" />
                             : <FiTrash2 size={16} className="text-gray-400" />
                         }
                     </button>

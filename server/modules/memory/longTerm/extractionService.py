@@ -7,6 +7,7 @@ import json
 from typing import List, Optional
 
 from config.logger import logger
+from common.prompts import FACT_EXTRACTION_SYSTEM, factExtractionUserPrompt
 
 
 class ExtractionService:
@@ -40,26 +41,8 @@ class ExtractionService:
     ) -> List[dict]:
         existing_str = "\n".join(f"- {f}" for f in existing) if existing else "None"
         return [
-            {
-                "role": "system",
-                "content": (
-                    "You extract durable personal facts about the user from conversations. "
-                    "Facts must be genuinely useful for future personalization "
-                    "(preferences, goals, background, constraints). "
-                    "Return a valid JSON array of strings. "
-                    "Return [] if nothing is worth remembering. "
-                    "Do not duplicate facts already in the existing list."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Existing facts:\n{existing_str}\n\n"
-                    f"User: {userMsg[:800]}\n"
-                    f"Assistant: {assistantMsg[:800]}\n\n"
-                    "Extract 0-3 new facts as a JSON array:"
-                ),
-            },
+            {"role": "system", "content": FACT_EXTRACTION_SYSTEM},
+            {"role": "user", "content": factExtractionUserPrompt(userMsg, assistantMsg, existing)},
         ]
 
     @staticmethod

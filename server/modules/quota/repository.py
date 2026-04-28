@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
 from config.logger import logger
 from config.database import db
@@ -85,7 +85,8 @@ class QuotaRepository:
         total = 0
         try:
             if db.useDatabase and db.pool:
-                weekStart = getWeekStart()
+                today = datetime.now().date()
+                weekStart = today - timedelta(days=today.weekday())
                 async with db.pool.acquire() as conn:
                     row = await conn.fetchrow(
                         """SELECT COALESCE(SUM(
@@ -93,7 +94,7 @@ class QuotaRepository:
                            ), 0) as total
                            FROM messages m
                            JOIN conversations c ON m."conversationId" = c.id
-                           WHERE c."userId" = $1 AND m."createdAt" >= $2::date""",
+                           WHERE c."userId" = $1 AND m."createdAt" >= $2""",
                         userId, weekStart
                     )
                     total = row["total"] if row else 0

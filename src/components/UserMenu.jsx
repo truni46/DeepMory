@@ -85,11 +85,11 @@ export default function UserMenu({ user }) {
     };
 
     return (
-        <div className="relative" ref={menuRef}>
+        <div className="relative py-1" ref={menuRef}>
             {/* Trigger button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-bg-tertiary transition-colors"
             >
                 <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
                     {user?.fullName?.charAt(0).toUpperCase() || 'U'}
@@ -97,10 +97,6 @@ export default function UserMenu({ user }) {
                 <span className="text-sm text-text-primary font-medium truncate flex-1 text-left">
                     {user?.fullName || 'User'}
                 </span>
-                {/* Dots icon */}
-                <svg className="w-4 h-4 text-text-muted shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                </svg>
             </button>
 
             {/* Dropdown menu — opens upward */}
