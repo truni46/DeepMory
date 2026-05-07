@@ -122,7 +122,14 @@ class MessageService:
             except Exception as e:
                 logger.warning(f"processMessageFlow: auto-detect documents failed for userId {userId}: {e}")
 
-        memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
+        try:
+            memoryTexts = await memoryFacade.retrieveRelevantMemories(userId, content, limit=5)
+        except Exception as e:
+            logger.error(f"[Memory] retrieveRelevantMemories failed for user {userId}: {e}")
+            memoryTexts = []
+
+        if memoryTexts:
+            logger.info(f"[Memory] Injecting {len(memoryTexts)} memories into prompt for user {userId}")
         memoryText = "\n".join(f"- {m}" for m in memoryTexts)
 
         systemPrompt = CHAT_SYSTEM
@@ -185,7 +192,6 @@ class MessageService:
         await quotaService.incrementUsage(userId, conversationId, usageDict.get("totalTokens", 0))
 
         quotaStatus = await quotaService.getStatus(userId, conversationId)
-        yield f"\n__QUOTA__{json.dumps(quotaStatus)}__QUOTA__"
 
         allSources = [s for s in (ragSources + documentSources) if s.get("filename")]
         for d in autoDetectedDocs:
@@ -194,6 +200,8 @@ class MessageService:
         if allSources:
             yield f"\n__SOURCES__{json.dumps(allSources)}__SOURCES__"
 
+        yield f"\n__QUOTA__{json.dumps(quotaStatus)}__QUOTA__"
+
         asyncio.create_task(memoryFacade.addTurn(conversationId, "user", content))
         asyncio.create_task(memoryFacade.addTurn(conversationId, "assistant", fullResponse))
 
@@ -201,10 +209,9 @@ class MessageService:
             memoryFacade.processConversationTurn(userId, conversationId, content, fullResponse)
         )
 
-        if len(contextWindow) <= 1:
-            asyncio.create_task(
-                self.generateConversationTitle(conversationId, userId, content, fullResponse)
-            )
+        title = await self.generateConversationTitle(conversationId, userId, content, fullResponse)
+        if title:
+            yield f"\n__TITLE__{title}__TITLE__"
 
     @staticmethod
     def stripQuotaMarker(chunk: str):
@@ -254,6 +261,9 @@ class MessageService:
         self, conversationId: str, userId: str, userMessage: str, aiResponse: str
     ):
         try:
+            conv = await conversationService.getConversation(conversationId, userId)
+            if conv and conv.get("title") and conv["title"] != "New Conversation":
+                return None
             logger.info(f"Generating title for conversation {conversationId}")
             prompt = [
                 {"role": "system", "content": TITLE_SYSTEM},
@@ -268,8 +278,11 @@ class MessageService:
             if title:
                 logger.info(f"Generated title: {title}")
                 await conversationService.updateConversation(conversationId, userId, {"title": title})
+                return title
+            return None
         except Exception as e:
             logger.error(f"Error generating conversation title: {e}")
+            return None
 
 
 messageService = MessageService()

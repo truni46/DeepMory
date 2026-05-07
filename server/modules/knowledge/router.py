@@ -54,6 +54,17 @@ async def serveDocumentFile(
     documentId: str,
     currentUser: dict = Depends(getCurrentUser),
 ):
+    MIME_TYPES = {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+        "txt": "text/plain",
+        "md": "text/markdown",
+        "csv": "text/csv",
+        "tsv": "text/tab-separated-values",
+    }
     try:
         doc = await documentService.getDocument(documentId, str(currentUser["id"]))
         if not doc:
@@ -61,10 +72,11 @@ async def serveDocumentFile(
         filePath = doc["filePath"]
         if not os.path.exists(filePath):
             raise HTTPException(status_code=404, detail="File not found on disk")
+        mediaType = MIME_TYPES.get(doc.get("fileType", ""), "application/octet-stream")
         return FileResponse(
             path=filePath,
             filename=doc["filename"],
-            media_type="application/octet-stream",
+            media_type=mediaType,
         )
     except HTTPException:
         raise
@@ -87,6 +99,21 @@ async def getDocument(
         raise
     except Exception as e:
         logger.error(f"GET /knowledge/documents/{documentId} failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/{documentId}/retry")
+async def retryDocument(
+    documentId: str,
+    currentUser: dict = Depends(getCurrentUser),
+):
+    try:
+        doc = await documentService.retryDocument(documentId, str(currentUser["id"]))
+        return doc
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"POST /knowledge/documents/{documentId}/retry failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -116,4 +143,13 @@ async def updateDocument(
     payload: dict,
     currentUser: dict = Depends(getCurrentUser),
 ):
-    raise HTTPException(status_code=501, detail="Not implemented")
+    try:
+        doc = await documentService.updateDocument(documentId, str(currentUser["id"]), payload)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PATCH /knowledge/documents/{documentId} failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

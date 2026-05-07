@@ -26,23 +26,41 @@ from modules.rag.repository import Document, SearchResult
 def _chunkPages(pages: List[ParsedPage], chunkSize: int = 800, overlap: int = 100) -> List[dict]:
     if overlap >= chunkSize:
         raise ValueError(f"_chunkPages: overlap ({overlap}) must be less than chunkSize ({chunkSize})")
+
+    # Build flat text and record where each page starts so chunks can span boundaries
+    fullText = ""
+    pageBoundaries: List[tuple] = []  # (startChar, pageNumber)
+    for page in pages:
+        if not page.text.strip():
+            continue
+        pageBoundaries.append((len(fullText), page.pageNumber))
+        fullText += page.text + "\n"
+
+    if not fullText.strip():
+        return []
+
+    def _pageAt(pos: int) -> int:
+        pageNum = pageBoundaries[0][1] if pageBoundaries else 1
+        for startChar, num in pageBoundaries:
+            if pos >= startChar:
+                pageNum = num
+            else:
+                break
+        return pageNum
+
     chunks = []
     chunkIndex = 0
-    for page in pages:
-        text = page.text
-        if not text.strip():
-            continue
-        start = 0
-        while start < len(text):
-            chunkText = text[start:start + chunkSize]
-            if chunkText.strip():
-                chunks.append({
-                    "text": chunkText,
-                    "pageNumber": page.pageNumber,
-                    "chunkIndex": chunkIndex,
-                })
-                chunkIndex += 1
-            start += chunkSize - overlap
+    start = 0
+    while start < len(fullText):
+        chunkText = fullText[start:start + chunkSize]
+        if chunkText.strip():
+            chunks.append({
+                "text": chunkText,
+                "pageNumber": _pageAt(start),
+                "chunkIndex": chunkIndex,
+            })
+            chunkIndex += 1
+        start += chunkSize - overlap
     return chunks
 
 
