@@ -333,6 +333,7 @@ export default function ChatPage() {
                 const newConv = await conversationService.createConversation(title);
                 currentId = newConv.id;
                 justCreatedConversationId.current = currentId;
+                draftDocsRef.current[currentId] = [...selectedDocs];
                 await loadConversations();
                 setActiveConversationId(currentId);
             } catch (e) {
@@ -374,10 +375,6 @@ export default function ChatPage() {
                     setStreamingMessage('');
                     setIsTyping(false);
                     setIsStreaming(false);
-
-                    if (currentId) {
-                        setTimeout(() => loadConversations(), 2500);
-                    }
                 },
                 (error) => {
                     if (error.name !== 'AbortError') {
@@ -401,9 +398,10 @@ export default function ChatPage() {
                 },
                 docIds.length > 0 ? docIds : null,
                 (sources) => {
-                    // Sources are attached to the last assistant message after streaming completes
-                    // Currently logged; extend here to attach to message metadata if needed
                     logger.info('RAG sources received:', sources);
+                },
+                () => {
+                    loadConversations();
                 },
             );
         } catch (error) {
@@ -450,7 +448,10 @@ export default function ChatPage() {
     const handleDocumentsConfirm = (docs) => {
         setSelectedDocs(prev => {
             const prevMap = new Map(prev.map(d => [d.id, d]));
-            return docs.map(d => prevMap.get(d.id) || { ...d, active: true });
+            return docs.map(d => {
+                const existing = prevMap.get(d.id);
+                return existing ? { ...existing, active: true } : { ...d, active: true };
+            });
         });
     };
 

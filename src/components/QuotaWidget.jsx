@@ -73,7 +73,7 @@ export default function QuotaWidget({ quota, warning, inline = false }) {
     const remainingDash = circumference * Math.max(remainingPercent, 0);
 
     const expandedPanel = expanded && (
-        <div className="absolute bottom-full mb-2 right-0 bg-white border border-border rounded-xl shadow-xl p-4 w-72 animate-in fade-in duration-200 z-50">
+        <div className="absolute bottom-full mb-6 right-0 bg-white border border-border rounded-xl shadow-xl p-4 w-72 animate-in fade-in duration-200 z-50">
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-semibold text-text-primary">Token Usage</h4>
                 {isBlocked && (

@@ -27,6 +27,28 @@ def _computeHash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _convertDocToDocx(filePath: str) -> Optional[str]:
+    try:
+        import win32com.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        word = win32com.client.Dispatch("Word.Application")
+        word.Visible = False
+        try:
+            absPath = os.path.abspath(filePath)
+            doc = word.Documents.Open(absPath, ReadOnly=True)
+            docxPath = os.path.splitext(filePath)[0] + ".docx"
+            doc.SaveAs2(os.path.abspath(docxPath), FileFormat=16)
+            doc.Close(False)
+            return docxPath
+        finally:
+            word.Quit()
+            pythoncom.CoUninitialize()
+    except Exception as e:
+        logger.warning(f"_convertDocToDocx failed for {filePath}: {e}")
+        return None
+
+
 def _extractPageCount(filePath: str) -> int:
     ext = os.path.splitext(filePath)[1].lower()
     try:
@@ -104,6 +126,11 @@ class DocumentService:
             raise ValueError("File exceeds 50 MB limit")
 
         contentHash = _computeHash(content)
+        existing = await documentRepository.getByHashAndOwner(contentHash, ownerId)
+        if existing:
+            logger.info(f"_uploadOne: duplicate detected for '{filename}', returning existing document {existing['id']}")
+            return existing
+
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
         filePath = UPLOAD_DIR / storedFilename
 
@@ -133,6 +160,14 @@ class DocumentService:
     ) -> None:
         try:
             await documentRepository.updateEmbedding(documentId, "processing")
+
+            ext = os.path.splitext(filePath)[1].lower()
+            if ext == ".doc":
+                docxPath = _convertDocToDocx(filePath)
+                if docxPath:
+                    filePath = docxPath
+                    await documentRepository.updateFilePath(documentId, filePath, "docx")
+                    logger.info(f"Converted .doc to .docx for document {documentId}")
 
             indexPath = filePath
             if needsOcr(filePath):
@@ -281,6 +316,36 @@ class DocumentService:
         except Exception as e:
             logger.error(f"searchDocumentContext failed: {e}")
             return "", []
+
+    async def updateDocument(self, documentId: str, userId: str, fields: Dict) -> Optional[Dict]:
+        doc = await documentRepository.getById(documentId)
+        if not doc or str(doc.get("userId")) != str(userId):
+            return None
+        return await documentRepository.update(documentId, userId, fields)
+
+    async def retryDocument(self, documentId: str, userId: str) -> Dict:
+        doc = await documentRepository.getById(documentId)
+        if not doc or str(doc.get("userId")) != str(userId):
+            raise ValueError("Document not found")
+        if not doc.get("filePath") or not os.path.exists(doc["filePath"]):
+            raise ValueError("Source file no longer exists on disk")
+        embeddingStatus = doc.get("embeddingStatus")
+        ocrStatus = doc.get("ocrStatus")
+        if embeddingStatus not in ("failed", "pending") and ocrStatus not in ("failed",):
+            raise ValueError(f"Document is not in a retryable state (embeddingStatus={embeddingStatus}, ocrStatus={ocrStatus})")
+        await documentRepository.updateEmbedding(documentId, "pending")
+        if ocrStatus == "failed":
+            await documentRepository.updateOcr(documentId, "pending")
+        asyncio.create_task(
+            self._processDocument(
+                documentId,
+                doc["filePath"],
+                doc.get("ownerId", userId),
+                userId,
+                doc.get("filename"),
+            )
+        )
+        return await documentRepository.getById(documentId)
 
     async def deleteDocument(self, userId: str, documentId: str) -> bool:
         result = await documentRepository.delete(documentId, userId)

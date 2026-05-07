@@ -4,6 +4,7 @@ import DocumentCard from './DocumentCard';
 import DocumentDetailModal from './DocumentDetailModal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Table from '../ui/Table';
+import Checkbox from '../ui/Checkbox';
 import documentService from '../../services/documentService';
 
 const POLL_INTERVAL_MS = 3000;
@@ -92,6 +93,7 @@ export default function DocumentTable({ refreshTrigger }) {
     }, [filteredDocs, currentPage]);
 
     const allPageSelected = paginatedDocs.length > 0 && paginatedDocs.every(d => selectedIds.has(d.id));
+    const somePageSelected = !allPageSelected && paginatedDocs.some(d => selectedIds.has(d.id));
 
     const toggleSelectAll = () => {
         setSelectedIds(prev => {
@@ -160,25 +162,20 @@ export default function DocumentTable({ refreshTrigger }) {
 
     const checkboxHeader = (
         <div className="flex items-center justify-center">
-            <input
-                type="checkbox"
-                checked={allPageSelected}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded-full border-gray-300 text-primary focus:ring-primary cursor-pointer"
-            />
+            <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={toggleSelectAll} variant="header" />
         </div>
     );
 
     return (
         <>
-            <div className="relative mb-3">
-                <FiSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <div className="relative mb-3 group">
+                <FiSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-gray-600" />
                 <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search documents..."
-                    className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors w-64"
+                    className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
                 />
             </div>
             <div className="bg-white rounded-xl border border-border-color overflow-hidden">

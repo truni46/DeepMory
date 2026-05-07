@@ -4,6 +4,7 @@ import { FiTrash2 } from 'react-icons/fi';
 import { HiTrash } from 'react-icons/hi2';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { TableRow, TableCell } from '../ui/Table';
+import Checkbox from '../ui/Checkbox';
 
 function formatFileSize(bytes) {
     if (!bytes) return '—';
@@ -22,12 +23,10 @@ export default function DocumentCard({ document, selected, onToggleSelect, onVie
         <TableRow onClick={() => onView(document)}>
             <TableCell>
                 <div className="flex items-center justify-center">
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={!!selected}
                         onChange={e => { e.stopPropagation(); onToggleSelect(); }}
                         onClick={e => e.stopPropagation()}
-                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                     />
                 </div>
             </TableCell>

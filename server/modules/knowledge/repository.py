@@ -187,6 +187,76 @@ class DocumentRepository:
                 data[documentId]["updatedAt"] = now.isoformat()
                 db.write_json("documents", data)
 
+    async def updateFilePath(
+        self, documentId: str, filePath: str, fileType: str = None,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE documents SET
+                        "filePath" = $1,
+                        "fileType" = COALESCE($2, "fileType"),
+                        "updatedAt" = $3
+                    WHERE id = $4""",
+                    filePath, fileType, now, documentId,
+                )
+        else:
+            data = db.read_json("documents")
+            if documentId in data:
+                data[documentId]["filePath"] = filePath
+                if fileType:
+                    data[documentId]["fileType"] = fileType
+                data[documentId]["updatedAt"] = now.isoformat()
+                db.write_json("documents", data)
+
+    async def update(self, documentId: str, userId: str, fields: Dict) -> Optional[Dict]:
+        ALLOWED = {"filename", "scope", "ownerId", "ownerType"}
+        safe = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
+        if not safe:
+            return await self.getById(documentId)
+        now = datetime.now(timezone.utc)
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                setClauses = ", ".join(f'"{k}" = ${i+2}' for i, k in enumerate(safe))
+                values = list(safe.values())
+                row = await conn.fetchrow(
+                    f"""UPDATE documents SET {setClauses}, "updatedAt" = ${len(values)+2}
+                        WHERE id = $1 AND "userId" = ${len(values)+3}
+                        RETURNING *""",
+                    documentId, *values, now, userId,
+                )
+                return dict(row) if row else None
+        else:
+            data = db.read_json("documents")
+            doc = data.get(documentId)
+            if not doc or str(doc.get("userId")) != str(userId):
+                return None
+            doc.update(safe)
+            doc["updatedAt"] = now.isoformat()
+            db.write_json("documents", data)
+            return doc
+
+    async def getByHashAndOwner(self, contentHash: str, ownerId: str) -> Optional[Dict]:
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """SELECT * FROM documents WHERE "contentHash" = $1 AND "ownerId" = $2
+                       ORDER BY "createdAt" DESC LIMIT 1""",
+                    contentHash, ownerId,
+                )
+                return dict(row) if row else None
+        else:
+            data = db.read_json("documents")
+            matches = [
+                d for d in data.values()
+                if d.get("contentHash") == contentHash and str(d.get("ownerId")) == str(ownerId)
+            ]
+            if not matches:
+                return None
+            matches.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+            return matches[0]
+
     async def delete(self, documentId: str, userId: str) -> Optional[Tuple[str, str]]:
         """Returns (filePath, ownerId) if deleted, None if not found/unauthorized."""
         if db.useDatabase and db.pool:

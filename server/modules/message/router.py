@@ -104,7 +104,11 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
                     data.projectId,
                     data.documentIds,
                 ):
-                    if "__SOURCES__" in chunk:
+                    if "__TITLE__" in chunk:
+                        start = chunk.index("__TITLE__") + len("__TITLE__")
+                        end = chunk.index("__TITLE__", start)
+                        yield f"data: {json.dumps({'title': chunk[start:end]})}\n\n"
+                    elif "__SOURCES__" in chunk:
                         start = chunk.index("__SOURCES__") + len("__SOURCES__")
                         end = chunk.index("__SOURCES__", start)
                         try:
