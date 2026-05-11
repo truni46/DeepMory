@@ -14,7 +14,7 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group w-full`}>
             <div className={`flex items-start space-x-3 ${isUser ? 'max-w-[75%]' : 'w-full'}`}>
                 <div className="flex flex-col space-y-1 w-full">
-                    <div className={`${isUser ? 'bg-primary text-white' : 'bg-transparent w-full'} rounded-xl px-4 py-3`}>
+                    <div className={`${isUser ? 'bg-primary text-white' : 'bg-transparent w-full'} rounded-3xl rounded-tr px-4 py-3`}>
                         <div className={`prose prose-sm max-w-none break-words ${isUser ? 'text-white prose-invert' : 'text-text-primary'} [&>p]:!text-[14.5px] [&>p]:!leading-loose [&>ul>li]:!text-[14.5px] [&>ul>li]:!leading-loose [&>ol>li]:!text-[14.5px] [&>ol>li]:!leading-loose [&>ul]:!list-disc [&>ul]:!pl-5`}>
                             {isUser ? (
                                 <p className="whitespace-pre-wrap !text-[14.5px] !leading-loose">{message.content}</p>
@@ -37,7 +37,19 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                     return { start: null, end: null };
                                 }
 
-                                let processedContent = message.content?.replace(/<docref([^>]*?)>(.*?)<\/docref>/gi, (match, attrs, text) => {
+                                // Build chip label as "<filename> p.<N>" (or range) — ignore inner tag text
+                                function buildChipLabel(file, start, end) {
+                                    if (!file) return '';
+                                    if (start && end) return `${file} p.${start}–${end}`;
+                                    if (start) return `${file} p.${start}`;
+                                    return file;
+                                }
+
+                                // Hide an unclosed trailing <docref ...  fragment that arrives mid-stream
+                                // so users never see raw docId / attribute text while the tag is incomplete.
+                                let processedContent = message.content?.replace(/<docref\b[^>]*$/i, '');
+
+                                processedContent = processedContent?.replace(/<docref([^>]*?)>(.*?)<\/docref>/gi, (match, attrs /* innerText ignored */) => {
                                     const file = attrs.match(/file=(['"])(.*?)\1/)?.[2] || '';
                                     const docId = attrs.match(/docId=(['"])(.*?)\1/)?.[2] || attrs.match(/\bid=(['"])(.*?)\1/)?.[2];
                                     const { start, end } = extractPages(attrs);
@@ -49,13 +61,12 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                     const queryString = params.toString();
 
                                     const url = `#doc:${encodeURIComponent(file)}${queryString ? `?${queryString}` : ''}`;
-                                    return `[${text || file}](${url})`;
+                                    return `[${buildChipLabel(file, start, end)}](${url})`;
                                 });
-                                // Support self-closing tag: <docref file="abc.pdf" page="12" label="Text" />
+                                // Self-closing tag: <docref file="abc.pdf" page="12" />
                                 processedContent = processedContent?.replace(/<docref([^>]*?)\/>/gi, (match, attrs) => {
                                     const file = attrs.match(/file=(['"])(.*?)\1/)?.[2] || '';
                                     const docId = attrs.match(/docId=(['"])(.*?)\1/)?.[2] || attrs.match(/\bid=(['"])(.*?)\1/)?.[2];
-                                    const label = attrs.match(/label=(['"])(.*?)\1/)?.[2];
                                     const { start, end } = extractPages(attrs);
 
                                     const params = new URLSearchParams();
@@ -65,7 +76,7 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                     const queryString = params.toString();
 
                                     const url = `#doc:${encodeURIComponent(file)}${queryString ? `?${queryString}` : ''}`;
-                                    return `[${label || file}](${url})`;
+                                    return `[${buildChipLabel(file, start, end)}](${url})`;
                                 });
 
                                 return (
@@ -101,7 +112,7 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                                     const style = styleMap[ext] ?? { btn: 'bg-white hover:bg-blue-200 text-blue-800 border-blue-300', icon: 'text-blue-600' };
 
                                                     return (
-                                                        <button 
+                                                        <button
                                                             className={`inline-flex items-center gap-1.5 px-2 py-0.5 mx-1 rounded-md border transition-colors align-middle cursor-pointer text-xs font-medium ${style.btn}`}
                                                             onClick={(e) => { e.preventDefault(); onDocumentClick?.(filename, pageStart, docId, pageEnd); }}
                                                             title={`View document: ${filename}`}

@@ -18,6 +18,12 @@ from common.cacheService import cacheService
 from modules.llm.embeddingProvider import embeddingService
 from modules.llm.llmProvider import llmProvider
 from modules.memory.shortTerm.contextWindowManager import contextWindowManager
+from common.prompts import (
+    AGENT_FACT_EXTRACTION_SYSTEM,
+    agentDedupPrompt,
+    conversationCompactionPrompt,
+    taskHistoryCompactionPrompt,
+)
 
 _SHORT_TERM_TTL = 24 * 3600
 _COMPACT_TOKEN_THRESHOLD = 500
@@ -127,12 +133,7 @@ class AgentMemory:
             logger.error(f"AgentMemory._processMemory failed userId={userId}: {e}")
 
     async def _extractFacts(self, messages: List[Dict]) -> List[str]:
-        prompt = """You are an expert fact extractor. Extract ONLY factual information from the user messages below. 
-Focus strictly on these categories: preferences, personal details, plans, activities, health, professional, misc.
-If there are no facts worth remembering (e.g., greetings, generic statements, vague comments), DO NOT extract anything.
-Respond in pure JSON format: {"facts": ["fact 1", "fact 2", ...]} or {"facts": []} if nothing is found."""
-        
-        systemMsg = [{"role": "system", "content": prompt}]
+        systemMsg = [{"role": "system", "content": AGENT_FACT_EXTRACTION_SYSTEM}]
         # Filter out to only human/ai messages if needed, here just pass the block
         allMsgs = systemMsg + messages
         try:
@@ -157,21 +158,8 @@ Respond in pure JSON format: {"facts": ["fact 1", "fact 2", ...]} or {"facts": [
             return {"action": "ADD", "content": newFact}
 
         memoriesStr = json.dumps([{"id": m.get("id", m.get("metadata", {}).get("id")), "content": m["content"]} for m in existingMemories], indent=2)
-        prompt = f"""You are coordinating memory deduplication.
-New Fact: "{newFact}"
-Existing Memories:
-{memoriesStr}
-
-Rules:
-- ADD: The fact is completely new and distinct from existing ones.
-- UPDATE: The fact overlaps heavily with an existing memory but contains new details. Provide the 'memoryId' to update, and the merged 'content'.
-- DELETE: The new fact completely contradicts an existing memory without replacing it cleanly, or the user explicitly asked to forget it. Provide 'memoryId'.
-- NONE: The exact same factual information is already present.
-
-Response must be pure JSON: {{"action": "ADD|UPDATE|DELETE|NONE", "memoryId": "<string or null>", "content": "<merged content if UPDATE>"}}"""
-        
         try:
-            resp = await llmProvider.generateResponse([{"role": "user", "content": prompt}], stream=False)
+            resp = await llmProvider.generateResponse([{"role": "user", "content": agentDedupPrompt(newFact, memoriesStr)}], stream=False)
             content = resp.content if hasattr(resp, "content") else str(resp)
             content = content.replace("'''json", "").replace("'''", "").strip()
             return json.loads(content)
@@ -512,15 +500,9 @@ Response must be pure JSON: {{"action": "ADD|UPDATE|DELETE|NONE", "memoryId": "<
                 if isinstance(m, dict) and m.get("content")
             )
 
-            prompt = (
-                "Summarize the following conversation messages into 2-3 concise sentences, "
-                "preserving key user preferences, clarifications, and context.\n\n"
-                + (f"Existing summary:\n{existingCompact}\n\n" if existingCompact else "")
-                + f"New messages:\n{newText}"
-            )
             try:
                 resp = await llmProvider.generateResponse(
-                    [{"role": "user", "content": prompt}], stream=False
+                    [{"role": "user", "content": conversationCompactionPrompt(existingCompact, newText)}], stream=False
                 )
                 newCompact = resp.content if hasattr(resp, "content") else str(resp)
             except Exception as llmErr:
@@ -597,14 +579,9 @@ Response must be pure JSON: {{"action": "ADD|UPDATE|DELETE|NONE", "memoryId": "<
                 f"- [{t.get('status', '?')}] {t.get('goal', '')} → {t.get('summary', '')}"
                 for t in toCompact
             )
-            prompt = (
-                "Summarize the following completed agent tasks into 2-3 sentences of dense context.\n\n"
-                + (f"Existing summary:\n{existingRunning}\n\n" if existingRunning else "")
-                + f"Tasks to compact:\n{compactText}"
-            )
             try:
                 resp = await llmProvider.generateResponse(
-                    [{"role": "user", "content": prompt}], stream=False
+                    [{"role": "user", "content": taskHistoryCompactionPrompt(existingRunning, compactText)}], stream=False
                 )
                 newRunning = resp.content if hasattr(resp, "content") else str(resp)
             except Exception as llmErr:

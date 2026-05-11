@@ -15,6 +15,7 @@ from config.logger import logger
 
 _WINDOW_TTL = int(os.getenv("REDIS_CONV_WINDOW_TTL", 3600))
 _SUMMARY_TTL = int(os.getenv("REDIS_SUMMARY_TTL", 86400))
+_WINDOW_SIZE = int(os.getenv("CONV_WINDOW_SIZE", 10))
 
 
 class ConvMemoryRepository:
@@ -27,9 +28,29 @@ class ConvMemoryRepository:
     def _summaryKey(conversationId: str) -> str:
         return f"convSummary:{conversationId}"
 
+    async def _getWindowFromDb(self, conversationId: str) -> List[Dict]:
+        if not (db.useDatabase and db.pool):
+            return []
+        try:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """SELECT role, content FROM messages
+                       WHERE "conversationId" = $1 AND role IN ('user', 'assistant')
+                       ORDER BY "createdAt" DESC
+                       LIMIT $2""",
+                    conversationId, _WINDOW_SIZE,
+                )
+                if rows:
+                    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+        except Exception as e:
+            logger.warning(f"_getWindowFromDb failed for {conversationId}: {e}")
+        return []
+
     async def getWindow(self, conversationId: str) -> List[Dict]:
         data = await cacheService.get(self._windowKey(conversationId))
-        return data if isinstance(data, list) else []
+        if isinstance(data, list) and data:
+            return data
+        return await self._getWindowFromDb(conversationId)
 
     async def setWindow(self, conversationId: str, window: List[Dict]) -> None:
         await cacheService.set(self._windowKey(conversationId), window, expire=_WINDOW_TTL)

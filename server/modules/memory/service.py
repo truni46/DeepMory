@@ -32,12 +32,14 @@ class MemoryFacade:
         userId: str,
         query: str,
         limit: int = 5,
+        threshold: float = 0.65,
     ) -> List[str]:
         """
-        Vector similarity search over user's long-term memories.
-        Returns plain text strings for injection into the system prompt.
+        Vector similarity search over user's long-term memories, with relevance threshold.
+        Only memories scoring >= threshold are returned, preventing off-topic memories
+        from polluting the system prompt.
         """
-        return await memRAG.retrieveRelevantMemories(userId, query, limit)
+        return await memRAG.retrieveRelevantMemories(userId, query, limit, threshold=threshold)
 
     async def processConversationTurn(
         self,

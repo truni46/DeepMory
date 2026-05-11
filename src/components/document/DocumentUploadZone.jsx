@@ -1,9 +1,9 @@
 // src/components/DocumentUploadZone.jsx
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useId } from 'react';
 import { FiUploadCloud, FiCheck, FiAlertCircle, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { CgSpinner } from 'react-icons/cg';
-import documentService from '../services/documentService';
-import { useToast } from '../context/ToastContext';
+import documentService from '../../services/documentService';
+import { useToast } from '../../context/ToastContext';
 
 const ACCEPTED = '.pdf,.txt,.md,.docx,.doc,.xlsx,.xls';
 const MAX_CONCURRENT = 3;
@@ -99,7 +99,7 @@ function FileProgressItem({ item, onPause, onResume, onCancel }) {
 export default function DocumentUploadZone({ onUploadComplete }) {
     const [dragOver, setDragOver] = useState(false);
     const [uploadItems, setUploadItems] = useState([]);
-    const inputRef = useRef(null);
+    const inputId = useId();
     const toast = useToast();
     const xhrMapRef = useRef({});
     const abortFlagsRef = useRef({});
@@ -288,14 +288,14 @@ export default function DocumentUploadZone({ onUploadComplete }) {
 
     return (
         <div className="bg-white rounded-xl border border-border-color p-6 space-y-4">
-            <div
+            <label
+                htmlFor={inputId}
                 onDragOver={e => {
                     e.preventDefault();
                     setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
-                onClick={() => inputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${
                     dragOver
                         ? 'border-primary bg-primary/5'
@@ -313,14 +313,17 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                     PDF, DOCX, XLSX, TXT, MD &nbsp;·&nbsp; Max 50 MB per file
                 </p>
                 <input
-                    ref={inputRef}
+                    id={inputId}
                     type="file"
                     className="hidden"
                     multiple
                     accept={ACCEPTED}
-                    onChange={e => handleFiles(e.target.files)}
+                    onChange={e => {
+                        handleFiles(e.target.files);
+                        e.target.value = '';
+                    }}
                 />
-            </div>
+            </label>
 
             {uploadItems.length > 0 && (
                 <div className="space-y-3 pt-2">

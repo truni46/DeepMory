@@ -11,6 +11,7 @@ from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
 from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import REPORT_TOOLS
+from common.prompts import reportSystemPrompt
 
 _reactAgent = create_agent(deepMoryLLM, REPORT_TOOLS)
 
@@ -48,12 +49,7 @@ async def reportNode(state: dict) -> dict:
             startTime = time.time()
 
             inputMessages = [
-                SystemMessage(content=(
-                    "You are a Report Agent. Create a comprehensive report. "
-                    "Use reportWriter to produce a structured markdown report.\n\n"
-                    f"Report format preferences:\n{proceduralText}"
-                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
-                )),
+                SystemMessage(content=reportSystemPrompt(proceduralText, threadContext)),
                 *conversationMessages,
                 HumanMessage(content=(
                     f"Goal: {goal}\n"

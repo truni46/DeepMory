@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDelayedSpinner } from '../hooks/useDelayedSpinner';
+import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
 export default function TextViewer({ fileUrl }) {
     const [content, setContent] = useState(null);

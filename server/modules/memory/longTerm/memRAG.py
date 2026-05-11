@@ -60,14 +60,23 @@ class MemRAG:
         userId: str,
         query: str,
         limit: int = 5,
+        threshold: float = 0.65,
     ) -> List[str]:
         """
-        Vector similarity search over user's memories.
-        Returns plain text strings for injection into the system prompt.
+        Vector similarity search over user's memories, filtered by relevance threshold.
+        Only memories with similarity score >= threshold are returned, so off-topic
+        memories never leak into the system prompt.
         """
         from modules.rag.ragService import ragService
 
-        results = await ragService.searchMemoryVectors(userId, query, limit)
+        results = await ragService.searchMemoryVectors(userId, query, limit, threshold=threshold)
+        if results:
+            logger.info(
+                f"[Memory] {len(results)} relevant memories for user {userId} "
+                f"(top score: {results[0].score:.3f}, threshold: {threshold})"
+            )
+        else:
+            logger.info(f"[Memory] no memories passed threshold {threshold} for user {userId}")
         return [r.document.content for r in results]
 
     async def deleteMemory(self, userId: str, memoryId: str) -> bool:

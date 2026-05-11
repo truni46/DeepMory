@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import DropdownMenu from './ui/DropdownMenu';
-import QuotaWidget from './QuotaWidget';
-import DocumentPickerModal from './DocumentPickerModal';
+import DropdownMenu from '../ui/DropdownMenu';
+import QuotaWidget from '../QuotaWidget';
+import DocumentPickerModal from '../document/DocumentPickerModal';
 
 const SLASH_COMMANDS = [
     { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
@@ -66,14 +66,14 @@ export default function ChatInput({
     useEffect(() => {
         if (prevConvIdRef.current !== conversationId) {
             draftsRef.current[prevConvIdRef.current] = message;
-            
+
             const nextMessage = draftsRef.current[conversationId] || '';
             setMessage(nextMessage);
-            
+
             if (editorRef.current) {
                 editorRef.current.textContent = nextMessage;
             }
-            
+
             prevConvIdRef.current = conversationId;
         }
     }, [conversationId, message]);
@@ -209,10 +209,10 @@ export default function ChatInput({
             <div className="max-w-3xl mx-auto">
                 <div className="flex items-end gap-2">
                     <div className="relative flex-1 flex flex-col bg-white border border-border rounded-3xl shadow-lg transition-shadow hover:shadow-xl">
-                        
-                        {selectedDocs.length > 0 && (
+
+                        {selectedDocs.filter(d => d.active !== false).length > 0 && (
                             <div className="flex flex-wrap gap-2 pt-3 px-3 pb-1">
-                                {selectedDocs.map(doc => {
+                                {selectedDocs.filter(d => d.active !== false).map(doc => {
                                     const colors = getFileColorConfig(doc.filename);
                                     return (
                                         <div
@@ -226,7 +226,7 @@ export default function ChatInput({
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{doc.filename}</p>
-                                            <p className="text-[10.5px] text-gray-500 mt-0.5">Tài liệu</p>
+                                            <p className="text-[10.5px] text-gray-500 mt-0.5">Document</p>
                                         </div>
                                         <button
                                             onClick={() => onDocumentRemove(doc.id)}
@@ -243,16 +243,19 @@ export default function ChatInput({
                             </div>
                         )}
 
-                        <div className="flex items-end space-x-2 p-2">
-                        <button
-                            onClick={() => setShowDocPicker(true)}
-                            className="flex-shrink-0 p-2 hover:bg-bg-secondary rounded-full transition-colors"
-                            title="Add documents"
-                        >
-                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                        </button>
+                        <div className="flex items-center justify-center space-x-2 p-2">
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button
+                                onClick={() => setShowDocPicker(true)}
+                                className="p-2 hover:bg-bg-secondary rounded-full transition-colors"
+                                title="Add documents"
+                            >
+                                <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+                            {quota && <QuotaWidget quota={quota} warning={quotaWarning} inline />}
+                        </div>
 
                         <div className="flex-1 relative pt-2">
                             <DropdownMenu
@@ -272,10 +275,10 @@ export default function ChatInput({
                                 onPaste={handlePaste}
                                 onCompositionStart={() => { isComposing.current = true; }}
                                 onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
-                                data-placeholder="Hỏi bất kỳ điều gì"
-                                className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                                data-placeholder="Say something..."
+                                className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] leading-[1.5] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 mb-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
                                 role="textbox"
-                                style={{ minHeight: '24px' }}
+                                style={{ minHeight: '24px', lineHeight: 1.5 }}
                             />
                         </div>
 
@@ -290,7 +293,7 @@ export default function ChatInput({
                         {isStreaming ? (
                             <button
                                 onClick={onStop}
-                                className="flex-shrink-0 p-2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm transition-colors"
+                                className="flex-shrink-0 p-2 rounded-full bg-red-700 hover:bg-red-800 text-white shadow-sm transition-colors"
                                 title="Dừng phản hồi"
                             >
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -305,7 +308,7 @@ export default function ChatInput({
                                     ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
                                     : 'bg-transparent text-text-muted cursor-not-allowed'
                                 }`}
-                                title={message.trim() ? "Gửi tin nhắn" : "Ghi âm"}
+                                title={message.trim() ? "Send messages" : "Record"}
                             >
                                 {message.trim() ? (
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

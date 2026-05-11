@@ -10,9 +10,13 @@ from config.logger import logger
 from modules.knowledge.repository import documentRepository
 from modules.rag.ragService import ragService
 from modules.llm.llmProvider import llmProvider
+from common.prompts import DOCUMENT_SUMMARY_SYSTEM, documentSummaryUserPrompt
+from modules.ocr.ocrProvider import ocrService, needsOcr
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+OCR_DIR = Path(__file__).parent.parent.parent / "data" / "uploads" / "ocr"
+OCR_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_TYPES = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -21,6 +25,28 @@ SUMMARY_MAX_CHARS = 4000
 
 def _computeHash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+def _convertDocToDocx(filePath: str) -> Optional[str]:
+    try:
+        import win32com.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        word = win32com.client.Dispatch("Word.Application")
+        word.Visible = False
+        try:
+            absPath = os.path.abspath(filePath)
+            doc = word.Documents.Open(absPath, ReadOnly=True)
+            docxPath = os.path.splitext(filePath)[0] + ".docx"
+            doc.SaveAs2(os.path.abspath(docxPath), FileFormat=16)
+            doc.Close(False)
+            return docxPath
+        finally:
+            word.Quit()
+            pythoncom.CoUninitialize()
+    except Exception as e:
+        logger.warning(f"_convertDocToDocx failed for {filePath}: {e}")
+        return None
 
 
 def _extractPageCount(filePath: str) -> int:
@@ -100,6 +126,11 @@ class DocumentService:
             raise ValueError("File exceeds 50 MB limit")
 
         contentHash = _computeHash(content)
+        existing = await documentRepository.getByHashAndOwner(contentHash, ownerId)
+        if existing:
+            logger.info(f"_uploadOne: duplicate detected for '{filename}', returning existing document {existing['id']}")
+            return existing
+
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
         filePath = UPLOAD_DIR / storedFilename
 
@@ -120,50 +151,81 @@ class DocumentService:
         )
 
         asyncio.create_task(
-            self._processDocument(record["id"], str(filePath), ownerId, userId)
+            self._processDocument(record["id"], str(filePath), ownerId, userId, filename)
         )
         return record
 
     async def _processDocument(
-        self, documentId: str, filePath: str, ownerId: str, userId: str
+        self, documentId: str, filePath: str, ownerId: str, userId: str, filename: Optional[str] = None
     ) -> None:
         try:
             await documentRepository.updateEmbedding(documentId, "processing")
-            chunkCount = await ragService.index(filePath, ownerId, documentId, userId)
+
+            ext = os.path.splitext(filePath)[1].lower()
+            if ext == ".doc":
+                docxPath = _convertDocToDocx(filePath)
+                if docxPath:
+                    filePath = docxPath
+                    await documentRepository.updateFilePath(documentId, filePath, "docx")
+                    logger.info(f"Converted .doc to .docx for document {documentId}")
+
+            indexPath = filePath
+            if needsOcr(filePath):
+                try:
+                    await documentRepository.updateOcr(documentId, "processing", isScanned=True)
+                    ocrPages = ocrService.ocrFile(filePath)
+                    ocrFilePath = str(OCR_DIR / f"{documentId}_ocr.txt")
+                    ocrService.saveOcrText(ocrPages, ocrFilePath)
+                    await documentRepository.updateOcr(documentId, "completed", ocrFilePath=ocrFilePath)
+                    indexPath = ocrFilePath
+                    logger.info(f"OCR completed for {documentId}: {len(ocrPages)} pages")
+                except Exception as e:
+                    logger.error(f"OCR failed for {documentId}: {e}")
+                    await documentRepository.updateOcr(documentId, "failed")
+
+            chunkCount = await ragService.index(indexPath, ownerId, documentId, userId, filename=filename)
             pageCount = _extractPageCount(filePath)
             await documentRepository.updateEmbedding(
                 documentId, "completed", chunkCount=chunkCount, pageCount=pageCount
             )
             logger.info(f"_processDocument completed for {documentId}")
-            asyncio.create_task(self._generateSummary(documentId, filePath))
+            asyncio.create_task(self._generateSummary(documentId, filePath, indexPath))
         except Exception as e:
             logger.error(f"_processDocument failed for {documentId}: {e}")
             await documentRepository.updateEmbedding(
                 documentId, "failed", errorMsg=str(e)
             )
 
-    async def _generateSummary(self, documentId: str, filePath: str) -> None:
+    async def _generateSummary(self, documentId: str, filePath: str, indexPath: str = None) -> None:
         try:
             await documentRepository.updateSummary(documentId, "processing")
-            text = _readTextContent(filePath)
+            text = _readTextContent(indexPath or filePath)
             if not text.strip():
                 await documentRepository.updateSummary(documentId, "failed")
                 return
             messages = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that summarizes documents concisely.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Summarize the following document in 3-5 sentences:\n\n{text}",
-                },
+                {"role": "system", "content": DOCUMENT_SUMMARY_SYSTEM},
+                {"role": "user", "content": documentSummaryUserPrompt(text)},
             ]
             response = await llmProvider.generateResponse(messages, stream=False)
             await documentRepository.updateSummary(
                 documentId, "completed", summary=response
             )
             logger.info(f"_generateSummary completed for {documentId}")
+            doc = await documentRepository.getById(documentId)
+            if doc:
+                docUserId = doc.get("userId") or ""
+                if docUserId:
+                    asyncio.create_task(
+                        ragService.upsertDocumentIndex(
+                            userId=docUserId,
+                            documentId=documentId,
+                            filename=doc.get("filename", ""),
+                            summary=response,
+                        )
+                    )
+                else:
+                    logger.warning(f"_generateSummary: skipping upsertDocumentIndex for {documentId} — missing userId")
         except Exception as e:
             logger.error(f"_generateSummary failed for {documentId}: {e}")
             await documentRepository.updateSummary(documentId, "failed")
@@ -191,11 +253,11 @@ class DocumentService:
                 if not doc:
                     logger.warning(f"getDocumentContext: document {docId} not found or unauthorized for user {userId}")
                     continue
-                filePath = doc.get("filePath", "")
-                if not filePath:
-                    logger.warning(f"getDocumentContext: no filePath for document {docId}")
+                readPath = doc.get("ocrFilePath") or doc.get("filePath", "")
+                if not readPath:
+                    logger.warning(f"getDocumentContext: no readPath for document {docId}")
                     continue
-                text = _readTextContent(filePath, maxChars=8000)
+                text = _readTextContent(readPath, maxChars=8000)
                 if text.strip():
                     parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
             except Exception as e:
@@ -216,10 +278,21 @@ class DocumentService:
 
             if results and maxScore >= 0.5:
                 contextText = "\n\n".join(r.document.content for r in results)
+                idToFilename: Dict[str, str] = {}
+                for r in results:
+                    did = r.document.metadata.get("documentId")
+                    if did and did not in idToFilename:
+                        d = await documentRepository.getById(did)
+                        if d and d.get("filename"):
+                            idToFilename[did] = d["filename"]
                 sources = [
                     {
-                        "filename": r.document.metadata.get("filename"),
+                        "filename": idToFilename.get(
+                            r.document.metadata.get("documentId"),
+                            r.document.metadata.get("filename"),
+                        ),
                         "pageNumber": r.document.metadata.get("pageNumber"),
+                        "documentId": r.document.metadata.get("documentId"),
                     }
                     for r in results
                 ]
@@ -232,16 +305,47 @@ class DocumentService:
                     doc = await self.getDocument(docId, userId)
                     if not doc:
                         continue
-                    text = _readTextContent(doc["filePath"], maxChars=8000)
+                    readPath = doc.get("ocrFilePath") or doc["filePath"]
+                    text = _readTextContent(readPath, maxChars=8000)
                     if text.strip():
                         parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
-                        sources.append({"filename": doc.get("filename"), "pageNumber": None})
+                        sources.append({"filename": doc.get("filename"), "pageNumber": None, "documentId": docId})
                 except Exception as e:
                     logger.error(f"searchDocumentContext fallback failed for {docId}: {e}")
             return "\n\n".join(parts), sources
         except Exception as e:
             logger.error(f"searchDocumentContext failed: {e}")
             return "", []
+
+    async def updateDocument(self, documentId: str, userId: str, fields: Dict) -> Optional[Dict]:
+        doc = await documentRepository.getById(documentId)
+        if not doc or str(doc.get("userId")) != str(userId):
+            return None
+        return await documentRepository.update(documentId, userId, fields)
+
+    async def retryDocument(self, documentId: str, userId: str) -> Dict:
+        doc = await documentRepository.getById(documentId)
+        if not doc or str(doc.get("userId")) != str(userId):
+            raise ValueError("Document not found")
+        if not doc.get("filePath") or not os.path.exists(doc["filePath"]):
+            raise ValueError("Source file no longer exists on disk")
+        embeddingStatus = doc.get("embeddingStatus")
+        ocrStatus = doc.get("ocrStatus")
+        if embeddingStatus not in ("failed", "pending") and ocrStatus not in ("failed",):
+            raise ValueError(f"Document is not in a retryable state (embeddingStatus={embeddingStatus}, ocrStatus={ocrStatus})")
+        await documentRepository.updateEmbedding(documentId, "pending")
+        if ocrStatus == "failed":
+            await documentRepository.updateOcr(documentId, "pending")
+        asyncio.create_task(
+            self._processDocument(
+                documentId,
+                doc["filePath"],
+                doc.get("ownerId", userId),
+                userId,
+                doc.get("filename"),
+            )
+        )
+        return await documentRepository.getById(documentId)
 
     async def deleteDocument(self, userId: str, documentId: str) -> bool:
         result = await documentRepository.delete(documentId, userId)
@@ -253,10 +357,21 @@ class DocumentService:
                 os.remove(filePath)
         except Exception as e:
             logger.error(f"deleteDocument file removal failed for {documentId}: {e}")
+        ocrPath = str(OCR_DIR / f"{documentId}_ocr.txt")
+        try:
+            if os.path.exists(ocrPath):
+                os.remove(ocrPath)
+        except Exception as e:
+            logger.error(f"deleteDocument OCR file removal failed for {documentId}: {e}")
         try:
             await ragService.deleteDocumentChunks(ownerId, documentId)
         except Exception as e:
             logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
+        # doc-index is keyed by userId (uploader), not ownerId (project/user namespace)
+        try:
+            await ragService.deleteDocumentIndex(userId, documentId)
+        except Exception as e:
+            logger.error(f"deleteDocument doc-index cleanup failed for {documentId}: {e}")
         return True
 
 

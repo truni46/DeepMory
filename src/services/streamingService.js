@@ -21,7 +21,7 @@ class StreamingService {
      * @param {Array|null} documentIds Document IDs for RAG
      * @param {Function|null} onSources Callback for source citations
      */
-    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota, documentIds = null, onSources = null) {
+    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota, documentIds = null, onSources = null, onTitle = null) {
         try {
             this._abortController = new AbortController();
 
@@ -88,6 +88,10 @@ class StreamingService {
                                 onChunk(data.chunk);
                             }
 
+                            if (data.title) {
+                                if (onTitle) onTitle(data.title);
+                            }
+
                             if (data.done) {
                                 if (data.quota && onQuota) {
                                     onQuota(data.quota, false);
@@ -113,7 +117,6 @@ class StreamingService {
                                     }
                                 }
                                 onComplete(finalResponse);
-                                return;
                             }
                         } catch (err) {
                             console.error('Error parsing SSE data:', err);

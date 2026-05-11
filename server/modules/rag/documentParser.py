@@ -32,14 +32,47 @@ class PdfParser:
 
 
 class DocxParser:
+    # OOXML namespace used by Word for page-break markers
+    _W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+    def _splitByPages(self, doc) -> List[ParsedPage]:
+        """Split paragraphs into pages using <w:lastRenderedPageBreak/> and explicit page breaks.
+
+        Page numbers are 1-based. Requires the docx to have been rendered/saved
+        by Word at least once so `lastRenderedPageBreak` markers exist.
+        """
+        pages: List[List[str]] = [[]]
+        for para in doc.paragraphs:
+            text = para.text or ""
+            # Check this paragraph for page-break markers BEFORE adding its text.
+            # lastRenderedPageBreak lives inside run elements; explicit <w:br w:type="page"/> too.
+            xml = para._p
+            for br in xml.iter(f"{self._W_NS}br"):
+                if br.get(f"{self._W_NS}type") == "page":
+                    pages.append([])
+            for _ in xml.iter(f"{self._W_NS}lastRenderedPageBreak"):
+                pages.append([])
+            if text.strip():
+                pages[-1].append(text)
+        result: List[ParsedPage] = []
+        for i, chunk in enumerate(pages):
+            joined = "\n".join(chunk).strip()
+            if joined:
+                result.append(ParsedPage(text=joined, pageNumber=i + 1))
+        return result
+
     def parse(self, filePath: str) -> List[ParsedPage]:
         # Tier 1: python-docx (handles .docx and OOXML-based .doc)
         try:
             import docx
             doc = docx.Document(filePath)
+            paged = self._splitByPages(doc)
+            if paged:
+                return paged
+            # Fallback: no page markers present — emit single page
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
             if text.strip():
-                return [ParsedPage(text=text, pageNumber=None)]
+                return [ParsedPage(text=text, pageNumber=1)]
         except Exception as e:
             logger.warning(f"DocxParser: python-docx failed for '{filePath}': {e}")
 

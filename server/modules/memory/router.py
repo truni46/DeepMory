@@ -21,15 +21,20 @@ class MemorySettingsRequest(BaseModel):
 async def getMemories(currentUser: dict = Depends(getCurrentUser)):
     """Get all memories for the current user."""
     userId = str(currentUser["id"])
-    memories = await memoryRepository.getByUser(userId, limit=200)
-    return [
-        {
-            "id": m["id"],
-            "content": m["content"],
-            "createdAt": m.get("createdAt"),
-        }
-        for m in memories
-    ]
+    try:
+        memories = await memoryRepository.getByUser(userId, limit=200)
+        logger.info(f"GET /memory: returning {len(memories)} memories for user {userId}")
+        return [
+            {
+                "id": str(m["id"]),
+                "content": m["content"],
+                "createdAt": m["createdAt"].isoformat() if hasattr(m.get("createdAt"), "isoformat") else m.get("createdAt"),
+            }
+            for m in memories
+        ]
+    except Exception as e:
+        logger.error(f"GET /memory failed for user {userId}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load memories")
 
 
 @router.patch("/{memoryId}")

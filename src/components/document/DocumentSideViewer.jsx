@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiX, FiFileText, FiDownload, FiZoomIn, FiZoomOut } from 'react-icons/fi';
-import documentService from '../services/documentService';
-import PDFViewer from './PDFViewer';
-import WordViewer from './WordViewer';
-import ExcelViewer from './ExcelViewer';
-import TextViewer from './TextViewer';
-import TSVViewer from './TSVViewer';
-import MarkdownViewer from './MarkdownViewer';
+import documentService from '../../services/documentService';
+import PDFViewer from '../viewer/PDFViewer';
+import WordViewer from '../viewer/WordViewer';
+import ExcelViewer from '../viewer/ExcelViewer';
+import TextViewer from '../viewer/TextViewer';
+import TSVViewer from '../viewer/TSVViewer';
+import MarkdownViewer from '../viewer/MarkdownViewer';
 
 export default function DocumentSideViewer({ document, pageStart, pageEnd, onClose }) {
     const [fileUrl, setFileUrl] = useState(null);
@@ -23,11 +23,11 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
 
     const zoomIn  = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
     const zoomOut = useCallback(() => setScale(s => Math.max(0.2, parseFloat((s - 0.1).toFixed(1)))), []);
-    
+
     // Safety check just in case document is malformed or just a filename skeleton
     const filename = document?.filename || document?.name || 'document';
     const fileType = document?.fileType || filename.split('.').pop().toLowerCase();
-    
+
     const isPdf   = fileType === 'pdf';
     const isWord   = fileType === 'docx' || fileType === 'doc';
     const isExcel  = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
@@ -59,14 +59,14 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
     if (!document) return null;
 
     return (
-        <div className="h-full flex flex-col bg-white border-l border-border-color shadow-xl overflow-hidden transition-all duration-300 transform translate-x-0">
+        <div className="h-full flex flex-col bg-white border border-gray-300 shadow-xl overflow-hidden transition-all duration-300 m-3 rounded-2xl transform translate-x-0">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-color bg-gray-50/50">
                 <div className="flex items-center gap-3 overflow-hidden">
                     <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border shadow-sm flex-shrink-0">
-                        {isPdf ? <FiFileText className="text-orange-500" /> : 
-                         isWord ? <FiFileText className="text-blue-500" /> : 
-                         isExcel ? <FiFileText className="text-green-500" /> : 
+                        {isPdf ? <FiFileText className="text-orange-500" /> :
+                         isWord ? <FiFileText className="text-blue-500" /> :
+                         isExcel ? <FiFileText className="text-green-500" /> :
                          <FiFileText className="text-gray-500" />}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -79,7 +79,7 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
-                    {isPdf && (
+                    {(isPdf || isWord) && (
                         <>
                             <button onClick={zoomOut} className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-gray-100 rounded-md transition-colors" title="Zoom out (or Ctrl+Scroll)">
                                 <FiZoomOut size={16} />
@@ -116,7 +116,7 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
                 ) : isPdf ? (
                     <PDFViewer fileUrl={fileUrl} initialPage={initialPage} scale={scale} onScaleChange={setScale} />
                 ) : isWord ? (
-                    <WordViewer fileUrl={fileUrl} />
+                    <WordViewer fileUrl={fileUrl} initialPage={initialPage} scale={scale} onScaleChange={setScale} />
                 ) : isExcel ? (
                     <ExcelViewer fileUrl={fileUrl} />
                 ) : isText ? (

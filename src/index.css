@@ -84,8 +84,8 @@
 
 /* Thinking wipe animation */
 @keyframes thinking-wipe {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
 }
 
 .thinking-text {
@@ -94,7 +94,7 @@
     #9ca3af 0%,
     #9ca3af 20%,
     #007E6E 42%,
-    #4ade80 50%,
+    #007E6E 50%,
     #007E6E 58%,
     #9ca3af 80%,
     #9ca3af 100%
@@ -103,5 +103,15 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: thinking-wipe 1.8s linear infinite;
+  animation: thinking-wipe 3s linear infinite;
+}
+
+/* Typing indicator scale pulse */
+@keyframes typing-scale-pulse {
+  0%, 100% { transform: scale(0.45); }
+  50%       { transform: scale(1.2); }
+}
+
+.typing-dot {
+  animation: typing-scale-pulse 0.8s ease-in-out infinite;
 }

@@ -31,7 +31,7 @@ function ToastItem({ toast, onDismiss }) {
             <div className="flex flex-col">
                 <p className="text-sm font-semibold text-gray-900 leading-5">{toast.title}</p>
                 {toast.description && (
-                    <p className="text-sm text-gray-500 mt-0.5">{toast.description}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{toast.description}</p>
                 )}
             </div>
         </div>

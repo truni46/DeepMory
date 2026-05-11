@@ -5,31 +5,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from config.logger import logger
 from modules.agents.deepMoryLLM import deepMoryLLM
 from modules.agents.orchestrator.taskState import TaskState
+from common.prompts import SUPERVISOR_SYSTEM, supervisorUserPrompt
 
 _VALID_AGENTS = {"research", "planner", "implement", "testing", "report", "END"}
-
-_SYSTEM_PROMPT = """You are the Supervisor of a multi-agent pipeline. Your only job is to decide which agent to run next.
-
-Agents available:
-- research: gather information, search web and knowledge base
-- planner: create a structured execution plan from research
-- implement: execute the plan, write code or documents
-- testing: validate and test the implementation
-- report: synthesize everything into a final report
-- END: the task is complete, stop
-
-Routing rules (use judgment, these are guidelines):
-1. No research yet → research
-2. Has research but no plan → planner
-3. Has plan but no implementation → implement
-4. Has implementation but no testing → testing
-5. Testing passed → report
-6. Testing failed AND iterationCount < maxIterations → implement (retry)
-7. Testing failed AND iterationCount >= maxIterations → report (partial failure)
-8. Has final report → END
-9. status is failed/cancelled → END
-
-Respond with EXACTLY one word: the agent name or END. Nothing else."""
 
 
 async def supervisorNode(state: TaskState) -> dict:
@@ -57,8 +35,8 @@ async def supervisorNode(state: TaskState) -> dict:
         )
 
         messages = [
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=f"Current pipeline state:\n{stateContext}\n\nWhich agent should run next?"),
+            SystemMessage(content=SUPERVISOR_SYSTEM),
+            HumanMessage(content=supervisorUserPrompt(stateContext)),
         ]
 
         response = await deepMoryLLM.ainvoke(messages)

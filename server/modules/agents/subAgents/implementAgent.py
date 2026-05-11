@@ -11,6 +11,7 @@ from modules.agents.memory.agentMemory import agentMemory
 from modules.agents.subAgents.agentUtils import extractLastAIContent, extractConversationContext
 from modules.agents.subAgents.taskRunner import taskRunner
 from modules.agents.subAgents.tools import IMPLEMENT_TOOLS
+from common.prompts import implementSystemPrompt
 
 _reactAgent = create_agent(deepMoryLLM, IMPLEMENT_TOOLS)
 
@@ -48,12 +49,7 @@ async def implementNode(state: dict) -> dict:
             startTime = time.time()
 
             inputMessages = [
-                SystemMessage(content=(
-                    "You are an Implement Agent. Execute tasks by writing code or documents. "
-                    "Use codeWriter for code files, fileWriter for text/markdown, shellRunner to run commands.\n\n"
-                    f"Tech preferences:\n{proceduralText}"
-                    + (f"\n\nThread context:\n{threadContext}" if threadContext else "")
-                )),
+                SystemMessage(content=implementSystemPrompt(proceduralText, threadContext)),
                 *conversationMessages,
                 HumanMessage(content=(
                     f"Goal: {goal}\nPlan: {plan}\n\n"

@@ -9,17 +9,7 @@ from langchain_core.messages import BaseMessage
 from config.logger import logger
 from modules.agents.repository import agentRepository
 from modules.llm.llmProvider import llmProvider
-
-_TASK_GEN_PROMPT = (
-    "You are a task planner for the {agentType} phase.\n"
-    "Given the user's goal and conversation context, generate a concise list of specific tasks "
-    "that need to be completed for this phase.\n\n"
-    "Rules:\n"
-    "- Generate 2-5 tasks maximum\n"
-    "- Each task should be actionable and specific\n"
-    "- Tasks should be ordered by execution sequence\n"
-    "- Respond in pure JSON: {{\"tasks\": [{{\"description\": \"task description\"}}]}}"
-)
+from common.prompts import TASK_GEN_PROMPT
 
 
 class TaskRunner:
