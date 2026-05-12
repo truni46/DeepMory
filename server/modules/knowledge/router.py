@@ -85,6 +85,35 @@ async def serveDocumentFile(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/documents/{documentId}/ocr")
+async def getDocumentOcrText(
+    documentId: str,
+    currentUser: dict = Depends(getCurrentUser),
+):
+    try:
+        doc = await documentService.getDocument(documentId, str(currentUser["id"]))
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        ocrFilePath = doc.get("ocrFilePath")
+        if not ocrFilePath or doc.get("ocrStatus") != "completed":
+            raise HTTPException(status_code=404, detail="OCR not available for this document")
+        if not os.path.exists(ocrFilePath):
+            raise HTTPException(status_code=404, detail="OCR file not found on disk")
+        with open(ocrFilePath, "r", encoding="utf-8") as f:
+            text = f.read()
+        return {
+            "documentId": documentId,
+            "text": text,
+            "ocrStatus": doc.get("ocrStatus"),
+            "isScanned": doc.get("isScanned"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"GET /knowledge/documents/{documentId}/ocr failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/documents/{documentId}")
 async def getDocument(
     documentId: str,

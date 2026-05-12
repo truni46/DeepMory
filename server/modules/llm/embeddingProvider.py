@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import List, Protocol
 
@@ -7,6 +8,8 @@ import httpx
 from openai import AsyncOpenAI
 
 from config.logger import logger
+
+_ollamaSemaphore = asyncio.Semaphore(int(os.getenv("OLLAMA_MAX_CONCURRENT", "1")))
 
 
 class EmbeddingProvider(Protocol):
@@ -29,12 +32,15 @@ class OllamaEmbeddingProvider:
 
     def __init__(self, baseUrl: str = None, model: str = None, dim: int = 1024):
         raw = baseUrl or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        # Strip /v1 suffix — Ollama's /api/embed is at the root, not under /v1
         self._baseUrl = raw.rstrip("/").removesuffix("/v1")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
+        async with _ollamaSemaphore:
+            return await self._doEmbed(texts)
+
+    async def _doEmbed(self, texts: List[str]) -> List[List[float]]:
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
@@ -45,7 +51,7 @@ class OllamaEmbeddingProvider:
                 data = resp.json()
                 return data.get("embeddings", [])
         except Exception as e:
-            logger.error(f"OllamaEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
+            logger.error(f"OllamaEmbeddingProvider._doEmbed failed model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property

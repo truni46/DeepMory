@@ -56,9 +56,18 @@ class DocumentService {
             `${baseUrl}/knowledge/documents/${documentId}/file`,
             { headers: { Authorization: `Bearer ${token}` } }
         );
+        if (response.status === 404) {
+            const err = new Error('Document not found');
+            err.status = 404;
+            throw err;
+        }
         if (!response.ok) throw new Error('Failed to fetch file');
         const blob = await response.blob();
         return URL.createObjectURL(blob);
+    }
+
+    async getDocumentOcrText(documentId) {
+        return apiService.get(`/knowledge/documents/${documentId}/ocr`);
     }
 
     async deleteDocument(documentId) {

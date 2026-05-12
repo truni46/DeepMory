@@ -70,8 +70,6 @@ class PaddleOcrProvider:
             self._engine = PaddleOCR(
                 use_angle_cls=self._useCls,
                 lang=paddleLang,
-                use_gpu=False,
-                show_log=False,
             )
         return self._engine
 
@@ -88,13 +86,19 @@ class PaddleOcrProvider:
         results: List[OcrPage] = []
         for i, imgPath in enumerate(imagePaths):
             try:
-                ocrResult = engine.ocr(imgPath, cls=self._useCls)
+                ocrResult = engine.predict(imgPath)
                 lines: List[str] = []
                 confs: List[float] = []
-                if ocrResult and ocrResult[0]:
-                    for line in ocrResult[0]:
-                        lines.append(line[1][0])
-                        confs.append(line[1][1])
+                if ocrResult:
+                    res = ocrResult[0]
+                    if not hasattr(res, "get"):
+                        logger.error(f"PaddleOcrProvider: unexpected result type {type(res)} on page {i + 1}")
+                    else:
+                        texts = res.get("rec_texts") or []
+                        scores = res.get("rec_scores") or []
+                        for text, score in zip(texts, scores):
+                            lines.append(str(text))
+                            confs.append(float(score))
                 avgConf = sum(confs) / len(confs) if confs else 0.0
                 results.append(OcrPage(
                     text="\n".join(lines),
@@ -124,8 +128,6 @@ class PaddleVLOcrProvider(PaddleOcrProvider):
             self._engine = PaddleOCR(
                 use_angle_cls=True,
                 lang=paddleLang,
-                use_gpu=False,
-                show_log=False,
             )
         return self._engine
 
@@ -393,9 +395,10 @@ class OCRService:
         os.makedirs(os.path.dirname(outputPath), exist_ok=True)
         with open(outputPath, "w", encoding="utf-8") as f:
             for page in pages:
+                f.write(f"=== Page {page.pageNumber} ===\n")
                 if page.text:
                     f.write(page.text)
-                    f.write("\n\n")
+                f.write("\n\n")
         return outputPath
 
     @property

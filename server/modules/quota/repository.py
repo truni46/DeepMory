@@ -58,6 +58,8 @@ class QuotaRepository:
             logger.error(f"incrementUsage failed for user {userId}: {e}")
 
     async def rebuildSessionFromDb(self, userId: str, conversationId: str) -> int:
+        if not conversationId:
+            return 0
         total = 0
         try:
             if db.useDatabase and db.pool:

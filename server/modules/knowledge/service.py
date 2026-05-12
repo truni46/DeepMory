@@ -28,25 +28,42 @@ def _computeHash(content: bytes) -> str:
 
 
 def _convertDocToDocx(filePath: str) -> Optional[str]:
-    try:
-        import win32com.client
-        import pythoncom
-        pythoncom.CoInitialize()
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
+    import platform
+    import subprocess
+    docxPath = os.path.splitext(filePath)[0] + ".docx"
+
+    if platform.system() == "Windows":
         try:
-            absPath = os.path.abspath(filePath)
-            doc = word.Documents.Open(absPath, ReadOnly=True)
-            docxPath = os.path.splitext(filePath)[0] + ".docx"
-            doc.SaveAs2(os.path.abspath(docxPath), FileFormat=16)
-            doc.Close(False)
+            import win32com.client
+            import pythoncom
+            pythoncom.CoInitialize()
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            try:
+                absPath = os.path.abspath(filePath)
+                doc = word.Documents.Open(absPath, ReadOnly=True)
+                doc.SaveAs2(os.path.abspath(docxPath), FileFormat=16)
+                doc.Close(False)
+                return docxPath
+            finally:
+                word.Quit()
+                pythoncom.CoUninitialize()
+        except Exception as e:
+            logger.warning(f"_convertDocToDocx win32com failed for {filePath}: {e}")
+            return None
+
+    try:
+        outDir = os.path.dirname(os.path.abspath(filePath))
+        result = subprocess.run(
+            ["libreoffice", "--headless", "--convert-to", "docx", "--outdir", outDir, os.path.abspath(filePath)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode == 0 and os.path.exists(docxPath):
             return docxPath
-        finally:
-            word.Quit()
-            pythoncom.CoUninitialize()
+        logger.warning(f"_convertDocToDocx libreoffice failed: {result.stderr}")
     except Exception as e:
         logger.warning(f"_convertDocToDocx failed for {filePath}: {e}")
-        return None
+    return None
 
 
 def _extractPageCount(filePath: str) -> int:

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { FiSearch } from 'react-icons/fi';
+import { FiSearch, FiTrash2 } from 'react-icons/fi';
 import DocumentCard from './DocumentCard';
 import DocumentDetailModal from './DocumentDetailModal';
+import OcrViewerModal from './OcrViewerModal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Table from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
@@ -20,6 +21,7 @@ export default function DocumentTable({ refreshTrigger }) {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState(null);
+    const [ocrDoc, setOcrDoc] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState(new Set());
@@ -92,19 +94,15 @@ export default function DocumentTable({ refreshTrigger }) {
         return filteredDocs.slice(start, start + PAGE_SIZE);
     }, [filteredDocs, currentPage]);
 
-    const allPageSelected = paginatedDocs.length > 0 && paginatedDocs.every(d => selectedIds.has(d.id));
-    const somePageSelected = !allPageSelected && paginatedDocs.some(d => selectedIds.has(d.id));
+    const allSelected = paginatedDocs.length > 0 && paginatedDocs.every(d => selectedIds.has(d.id));
+    const someSelected = !allSelected && paginatedDocs.some(d => selectedIds.has(d.id));
 
     const toggleSelectAll = () => {
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            if (allPageSelected) {
-                paginatedDocs.forEach(d => next.delete(d.id));
-            } else {
-                paginatedDocs.forEach(d => next.add(d.id));
-            }
-            return next;
-        });
+        if (allSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(paginatedDocs.map(d => d.id)));
+        }
     };
 
     const toggleSelect = (id) => {
@@ -117,26 +115,41 @@ export default function DocumentTable({ refreshTrigger }) {
     };
 
     const [deleteTarget, setDeleteTarget] = useState(null);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
 
     const handleDeleteRequest = useCallback((documentId) => {
         const doc = documents.find(d => d.id === documentId);
         setDeleteTarget({ id: documentId, filename: doc?.filename || 'this document' });
     }, [documents]);
 
+    const handleBulkDeleteRequest = useCallback(() => {
+        if (selectedIds.size === 0) return;
+        setDeleteTarget({ bulk: true, ids: [...selectedIds], count: selectedIds.size });
+    }, [selectedIds]);
+
     const handleDeleteConfirm = useCallback(async () => {
         if (!deleteTarget) return;
         try {
-            await documentService.deleteDocument(deleteTarget.id);
-            setDocuments(prev => prev.filter(d => d.id !== deleteTarget.id));
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(deleteTarget.id);
-                return next;
-            });
+            if (deleteTarget.bulk) {
+                setBulkDeleting(true);
+                const ids = deleteTarget.ids;
+                await Promise.all(ids.map(id => documentService.deleteDocument(id)));
+                setDocuments(prev => prev.filter(d => !ids.includes(d.id)));
+                setSelectedIds(new Set());
+            } else {
+                await documentService.deleteDocument(deleteTarget.id);
+                setDocuments(prev => prev.filter(d => d.id !== deleteTarget.id));
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(deleteTarget.id);
+                    return next;
+                });
+            }
         } catch (err) {
             console.error('Delete failed:', err);
         } finally {
             setDeleteTarget(null);
+            setBulkDeleting(false);
         }
     }, [deleteTarget]);
 
@@ -160,26 +173,47 @@ export default function DocumentTable({ refreshTrigger }) {
         return pages;
     };
 
-    const checkboxHeader = (
-        <div className="flex items-center justify-center">
-            <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={toggleSelectAll} variant="header" />
-        </div>
-    );
+    const hasSelection = selectedIds.size > 0;
 
     return (
         <>
-            <div className="relative mb-3 group">
-                <FiSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-gray-600" />
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search documents..."
-                    className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
-                />
+            <div className="flex items-center justify-between mb-3">
+                <div className="relative group">
+                    <FiSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-gray-600" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search documents..."
+                        className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
+                    />
+                </div>
+                {!loading && filteredDocs.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            checked={allSelected}
+                            indeterminate={someSelected}
+                            onChange={toggleSelectAll}
+                        />
+                        {hasSelection && (
+                            <span className="text-sm text-text-secondary">({selectedIds.size})</span>
+                        )}
+                        <button
+                            onClick={handleBulkDeleteRequest}
+                            disabled={!hasSelection || bulkDeleting}
+                            className={`p-1.5 rounded-md transition-colors ${
+                                hasSelection
+                                    ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                    : 'text-gray-300 cursor-not-allowed'
+                            }`}
+                            title={hasSelection ? `Delete ${selectedIds.size} selected` : 'Select items to delete'}
+                        >
+                            <FiTrash2 size={16} />
+                        </button>
+                    </div>
+                )}
             </div>
             <div className="bg-white rounded-xl border border-border-color overflow-hidden">
-
                 {loading ? (
                     <div className="p-12 text-center text-sm text-text-secondary">
                         Loading...
@@ -190,7 +224,7 @@ export default function DocumentTable({ refreshTrigger }) {
                     </div>
                 ) : (
                     <>
-                        <Table headers={[checkboxHeader, 'Name', 'Type', 'Size', 'Status', 'Uploaded', 'Actions']}>
+                        <Table headers={['', 'Name', 'Type', 'Size', 'Status', 'Uploaded', 'Actions']}>
                             {paginatedDocs.map(doc => (
                                 <DocumentCard
                                     key={doc.id}
@@ -199,6 +233,7 @@ export default function DocumentTable({ refreshTrigger }) {
                                     onToggleSelect={() => toggleSelect(doc.id)}
                                     onView={setSelectedDoc}
                                     onDelete={handleDeleteRequest}
+                                    onViewOcr={setOcrDoc}
                                 />
                             ))}
                         </Table>
@@ -249,11 +284,24 @@ export default function DocumentTable({ refreshTrigger }) {
                 />
             )}
 
+            {ocrDoc && (
+                <OcrViewerModal
+                    document={ocrDoc}
+                    onClose={() => setOcrDoc(null)}
+                />
+            )}
+
             <ConfirmDialog
                 open={!!deleteTarget}
-                title="Delete document?"
-                description={deleteTarget ? `"${deleteTarget.filename}" will be permanently deleted. This action cannot be undone.` : ''}
-                confirmLabel="Delete"
+                title={deleteTarget?.bulk ? `Delete ${deleteTarget.count} documents?` : 'Delete document?'}
+                description={
+                    deleteTarget?.bulk
+                        ? `${deleteTarget.count} documents will be permanently deleted. This action cannot be undone.`
+                        : deleteTarget
+                            ? `"${deleteTarget.filename}" will be permanently deleted. This action cannot be undone.`
+                            : ''
+                }
+                confirmLabel={bulkDeleting ? 'Deleting...' : 'Delete'}
                 cancelLabel="Cancel"
                 onConfirm={handleDeleteConfirm}
                 onCancel={handleDeleteCancel}
