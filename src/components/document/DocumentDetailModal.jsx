@@ -38,7 +38,11 @@ export default function DocumentDetailModal({ document, onClose }) {
                 objectUrl = url;
                 setFileUrl(url);
             })
-            .catch(() => setFileError('Could not load file preview.'));
+            .catch(err => setFileError(
+                err.status === 404
+                    ? 'Document no longer exists or has been deleted.'
+                    : 'Could not load file preview.'
+            ));
 
         return () => {
             if (objectUrl) URL.revokeObjectURL(objectUrl);

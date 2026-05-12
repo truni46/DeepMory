@@ -76,25 +76,49 @@ class DocxParser:
         except Exception as e:
             logger.warning(f"DocxParser: python-docx failed for '{filePath}': {e}")
 
-        # Tier 2: win32com Word automation (handles binary .doc on Windows)
-        try:
-            import win32com.client
-            import pythoncom
-            pythoncom.CoInitialize()
-            word = win32com.client.Dispatch("Word.Application")
-            word.Visible = False
+        # Tier 2: platform-specific binary .doc handling
+        import platform
+        if platform.system() == "Windows":
             try:
-                absPath = os.path.abspath(filePath)
-                doc = word.Documents.Open(absPath, ReadOnly=True)
-                text = doc.Content.Text
-                doc.Close(False)
-            finally:
-                word.Quit()
-                pythoncom.CoUninitialize()
-            if text.strip():
-                return [ParsedPage(text=text.strip(), pageNumber=None)]
-        except Exception as e:
-            logger.warning(f"DocxParser: win32com failed for '{filePath}': {e}")
+                import win32com.client
+                import pythoncom
+                pythoncom.CoInitialize()
+                word = win32com.client.Dispatch("Word.Application")
+                word.Visible = False
+                try:
+                    absPath = os.path.abspath(filePath)
+                    doc = word.Documents.Open(absPath, ReadOnly=True)
+                    text = doc.Content.Text
+                    doc.Close(False)
+                finally:
+                    word.Quit()
+                    pythoncom.CoUninitialize()
+                if text.strip():
+                    return [ParsedPage(text=text.strip(), pageNumber=None)]
+            except Exception as e:
+                logger.warning(f"DocxParser: win32com failed for '{filePath}': {e}")
+        else:
+            try:
+                import subprocess
+                outDir = os.path.dirname(os.path.abspath(filePath))
+                result = subprocess.run(
+                    ["libreoffice", "--headless", "--convert-to", "docx", "--outdir", outDir, os.path.abspath(filePath)],
+                    capture_output=True, text=True, timeout=60,
+                )
+                docxPath = os.path.splitext(filePath)[0] + ".docx"
+                if result.returncode == 0 and os.path.exists(docxPath):
+                    import docx as docxLib
+                    doc = docxLib.Document(docxPath)
+                    paged = self._splitByPages(doc)
+                    if paged:
+                        return paged
+                    text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                    if text.strip():
+                        return [ParsedPage(text=text, pageNumber=1)]
+                else:
+                    logger.warning(f"DocxParser: libreoffice failed for '{filePath}': {result.stderr}")
+            except Exception as e:
+                logger.warning(f"DocxParser: libreoffice failed for '{filePath}': {e}")
 
         # Tier 3: RTF detection + basic strip
         try:

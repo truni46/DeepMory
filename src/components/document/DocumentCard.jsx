@@ -1,6 +1,5 @@
-// src/components/DocumentCard.jsx
 import { useState } from 'react';
-import { FiTrash2 } from 'react-icons/fi';
+import { FiTrash2, FiAlignLeft } from 'react-icons/fi';
 import { HiTrash } from 'react-icons/hi2';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { TableRow, TableCell } from '../ui/Table';
@@ -13,7 +12,7 @@ function formatFileSize(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete }) {
+export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete, onViewOcr }) {
     const [hovered, setHovered] = useState(false);
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
@@ -53,12 +52,21 @@ export default function DocumentCard({ document, selected, onToggleSelect, onVie
                 {date}
             </TableCell>
             <TableCell isLast>
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-0.5">
+                    {document.isScanned && document.ocrStatus === 'completed' && (
+                        <button
+                            onClick={e => { e.stopPropagation(); onViewOcr(document); }}
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="View OCR result"
+                        >
+                            <FiAlignLeft size={15} />
+                        </button>
+                    )}
                     <button
                         onClick={e => { e.stopPropagation(); onDelete(document.id); }}
                         onMouseEnter={() => setHovered(true)}
                         onMouseLeave={() => setHovered(false)}
-                        className="p-2 transition-colors"
+                        className="p-2 transition-colors rounded"
                         title="Delete"
                     >
                         {hovered

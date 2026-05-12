@@ -41,10 +41,12 @@ services:
   frontend:
     build:
       context: .
-      # VITE_API_URL và VITE_SOCKET_URL mặc định /api/v1 và "" (relative)
-      # nginx proxy /api/ và /socket.io/ về backend — không cần hardcode IP VPS
+      dockerfile: nginx.Dockerfile
     ports:
       - "80:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - backend
     networks:

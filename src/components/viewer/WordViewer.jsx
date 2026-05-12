@@ -1,8 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Component } from 'react';
 import { renderAsync } from 'docx-preview';
 import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
-export default function WordViewer({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }) {
+class WordViewerErrorBoundary extends Component {
+    state = { hasError: false, error: null };
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="flex items-center justify-center h-full">
+                    <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm border border-red-200 flex items-center gap-2">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Could not render Word document.
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }) {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [numPages, setNumPages] = useState(null);
@@ -31,20 +51,20 @@ export default function WordViewer({ fileUrl, initialPage = 1, scale = 1.0, onSc
         setNumPages(null);
         containerRef.current.innerHTML = '';
 
-        fetch(fileUrl)
-            .then(res => res.arrayBuffer())
-            .then(buf => {
+        (async () => {
+            try {
+                const res = await fetch(fileUrl);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                const buf = await res.arrayBuffer();
                 if (cancelled || !containerRef.current) return;
-                return renderAsync(buf, containerRef.current, null, {
+                if (!buf || buf.byteLength === 0) throw new Error('Empty file');
+                await renderAsync(buf, containerRef.current, null, {
                     inWrapper: true,
                     breakPages: true,
                     ignoreLastRenderedPageBreak: false,
-                    experimental: true,
                     useBase64URL: true,
                     className: 'docx',
                 });
-            })
-            .then(() => {
                 if (cancelled || !containerRef.current) return;
                 const sections = containerRef.current.querySelectorAll('section.docx');
                 sections.forEach((sec, idx) => {
@@ -53,13 +73,13 @@ export default function WordViewer({ fileUrl, initialPage = 1, scale = 1.0, onSc
                 setNumPages(sections.length || 1);
                 setLoading(false);
                 setTimeout(() => scrollToPage(initialPage), 100);
-            })
-            .catch(err => {
+            } catch (err) {
                 if (cancelled) return;
                 console.error('WordViewer render failed:', err);
                 setError('Could not render Word document.');
                 setLoading(false);
-            });
+            }
+        })();
 
         return () => { cancelled = true; };
     }, [fileUrl, initialPage, scrollToPage]);
@@ -176,5 +196,13 @@ export default function WordViewer({ fileUrl, initialPage = 1, scale = 1.0, onSc
                 </div>
             )}
         </div>
+    );
+}
+
+export default function WordViewer(props) {
+    return (
+        <WordViewerErrorBoundary>
+            <WordViewerInner {...props} />
+        </WordViewerErrorBoundary>
     );
 }
