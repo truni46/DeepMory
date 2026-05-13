@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS documents (
     "summaryStatus" VARCHAR(20) NOT NULL DEFAULT 'pending',
     description TEXT,
     tags TEXT[],
+    "ocrFilePath" VARCHAR(1024),
+    "ocrStatus" VARCHAR(20),
+    "isScanned" BOOLEAN DEFAULT FALSE,
     "createdAt" TIMESTAMPTZ DEFAULT now(),
     "updatedAt" TIMESTAMPTZ DEFAULT now(),
     metadata JSONB DEFAULT '{}'
