@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -8,17 +9,19 @@ import asyncio
 
 load_dotenv()
 
+MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
+
 
 class Database:
     """Database manager with PostgreSQL and JSON fallback support"""
-    
+
     def __init__(self):
         self.useDatabase = os.getenv('USE_DATABASE', 'false').lower() == 'true'
         self.pool = None
         # Move up from config -> server -> root -> data
         self.data_dir = Path(__file__).parent.parent.parent / 'data'
         self.data_dir.mkdir(exist_ok=True)
-        
+
         # Database configuration
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -27,23 +30,51 @@ class Database:
             'user': os.getenv('DB_USER', 'deepmory'),
             'password': os.getenv('DB_PASSWORD', ''),
         }
-    
+
     async def connect(self):
         """Connect to PostgreSQL database"""
         if not self.useDatabase:
             logger.info("Database disabled, using JSON file storage")
             return
-        
+
         try:
             import asyncpg
-            # Create connection pool
             self.pool = await asyncpg.create_pool(**self.db_config)
             logger.info("Database connected successfully")
+            await self._runMigrations()
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             logger.warning("Falling back to JSON file storage")
             self.useDatabase = False
             self.pool = None
+
+    async def _runMigrations(self):
+        if not self.pool:
+            return
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS _migrations (
+                        name VARCHAR(255) PRIMARY KEY,
+                        "appliedAt" TIMESTAMPTZ DEFAULT now()
+                    )
+                """)
+                applied = {r["name"] for r in await conn.fetch('SELECT name FROM _migrations')}
+
+                files = sorted(
+                    f for f in MIGRATIONS_DIR.glob("*.sql")
+                    if re.match(r"^\d{3}_", f.name) and f.name not in applied
+                )
+                for f in files:
+                    sql = f.read_text(encoding="utf-8")
+                    logger.info(f"Applying migration {f.name} ...")
+                    await conn.execute(sql)
+                    await conn.execute(
+                        'INSERT INTO _migrations (name) VALUES ($1)', f.name
+                    )
+                    logger.info(f"Migration {f.name} applied")
+        except Exception as e:
+            logger.error(f"_runMigrations failed: {e}")
     
     async def close(self):
         """Close database connection"""
