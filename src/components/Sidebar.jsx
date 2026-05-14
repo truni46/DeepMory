@@ -91,7 +91,7 @@ export default function Sidebar({
                         </nav >
 
     {/* Chats Section */ }
-    < div className = "flex-1 mt-4" >
+    < div className = "flex-1 mt-4 overflow-y-auto min-h-0 custom-scrollbar" >
                             <div className="px-3 mb-2">
                                 <button className="w-full flex items-center justify-between text-text-secondary hover:text-text-primary transition-colors">
                                     <span className="text-xs md:text-sm font-medium text-gray-400 tracking-wide">Chats</span>

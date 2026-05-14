@@ -159,6 +159,10 @@ class MessageService:
         usageDict = None
         try:
             async for chunk in llmProvider._stream_response(messages):
+                # Thinking chunks pass straight through — not part of fullResponse
+                if chunk.startswith("__TSTART__") and chunk.endswith("__TEND__"):
+                    yield chunk
+                    continue
                 cleanChunk, chunkUsage = self.parseUsageFromStream(chunk)
                 if chunkUsage:
                     usageDict = chunkUsage

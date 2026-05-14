@@ -63,7 +63,13 @@ class BaseOpenAIProvider:
                         "source": "api_usage",
                     }
                 if chunk.choices:
-                    content = chunk.choices[0].delta.content
+                    delta = chunk.choices[0].delta
+                    # Thinking / reasoning content (DeepSeek-R1, QwQ, etc.)
+                    reasoning = getattr(delta, 'reasoning_content', None)
+                    if reasoning:
+                        yield f"__TSTART__{reasoning}__TEND__"
+                    # Regular text content
+                    content = delta.content
                     if content:
                         import asyncio
                         step = 4
@@ -98,6 +104,40 @@ class GeminiProvider(BaseOpenAIProvider):
         model = model or os.getenv("LLM_MODEL", "gemini-2.5-flash")
         super().__init__(APIKey=APIKey or "dummy", baseUrl=baseUrl, model=model)
 
+    async def streamResponse(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
+        import asyncio
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            usageDict = None
+            async for chunk in stream:
+                if chunk.usage:
+                    usageDict = {
+                        "promptTokens": chunk.usage.prompt_tokens,
+                        "completionTokens": chunk.usage.completion_tokens,
+                        "totalTokens": chunk.usage.total_tokens,
+                        "source": "api_usage",
+                    }
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    reasoning = getattr(delta, 'reasoning_content', None)
+                    if reasoning:
+                        yield f"__TSTART__{reasoning}__TEND__"
+                    content = delta.content
+                    if content:
+                        step = 4
+                        for i in range(0, len(content), step):
+                            yield content[i:i+step]
+                            await asyncio.sleep(0.01)
+            yield f"\n__USAGE__{json.dumps(usageDict)}__USAGE__"
+        except Exception as e:
+            logger.error(f"Gemini Streaming error ({self.model}): {e}")
+            raise e
+
 class GeminiNativeProvider:
     def __init__(self, APIKey: str = None, model: str = None):
         self.api_key = APIKey or os.getenv("GEMINI_API_KEY")
@@ -108,7 +148,13 @@ class GeminiNativeProvider:
         return self.model
 
     def _convert_messages(self, messages: List[Dict]) -> Dict:
-        payload = {"contents": [], "generationConfig": {"temperature": 0.7}}
+        payload = {
+            "contents": [],
+            "generationConfig": {
+                "temperature": 0.7,
+                "thinkingConfig": {"thinkingBudget": -1},
+            },
+        }
         for msg in messages:
             role = msg.get("role")
             content = msg.get("content", "")
@@ -181,10 +227,14 @@ class GeminiNativeProvider:
                                     }
                                 if "candidates" in data and len(data["candidates"]) > 0:
                                     parts = data["candidates"][0].get("content", {}).get("parts", [])
-                                    if parts:
-                                        content = parts[0].get("text", "")
-                                        if content:
-                                            yield content
+                                    for part in parts:
+                                        text = part.get("text", "")
+                                        if not text:
+                                            continue
+                                        if part.get("thought"):
+                                            yield f"__TSTART__{text}__TEND__"
+                                        else:
+                                            yield text
                             except json.JSONDecodeError:
                                 pass
             yield f"\n__USAGE__{json.dumps(usageDict)}__USAGE__"

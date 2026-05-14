@@ -40,6 +40,10 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
     const pageHeightsRef = useRef({});
     const debounceTimerRef = useRef(null);
     const pendingPageRef = useRef(null);
+    const scaleRef = useRef(scale);
+    const visiblePageRef = useRef(initialPage);
+    const prevScaleRef = useRef(scale);
+    const hasScrolledRef = useRef(false);
 
     const scrollToPage = useCallback((pageNum) => {
         const pageElement = document.getElementById(`pdf-page-${pageNum}`);
@@ -50,7 +54,18 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
 
     useEffect(() => {
         setZoomInput(Math.round(scale * 100).toString());
+        scaleRef.current = scale;
     }, [scale]);
+
+    // After scale changes, scroll back to the page that was visible before the zoom
+    useEffect(() => {
+        if (prevScaleRef.current === scale) return;
+        prevScaleRef.current = scale;
+        const page = visiblePageRef.current;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => scrollToPage(page));
+        });
+    }, [scale, scrollToPage]);
 
     const setScale = useCallback((updater) => {
         if (!onScaleChange) return;
@@ -87,17 +102,29 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         }, DEBOUNCE_MS);
     }, []);
 
-    function onDocumentLoadSuccess({ numPages: total }) {
+    const onDocumentLoadSuccess = useCallback(({ numPages: total }) => {
         setNumPages(total);
-        const start = Math.max(1, initialPage - PAGE_BUFFER);
-        const end = Math.min(total, initialPage + PAGE_BUFFER);
+        const validPage = (!initialPage || isNaN(initialPage)) ? 1 : initialPage;
+        const start = Math.max(1, validPage - PAGE_BUFFER);
+        const end = Math.min(total, validPage + PAGE_BUFFER);
         setRenderRange({ start, end });
-    }
+        // Backup scroll — fires if onPageLoadSuccess hasn't already handled it
+        if (validPage > 1) {
+            setTimeout(() => {
+                if (!hasScrolledRef.current) {
+                    hasScrolledRef.current = true;
+                    scrollToPage(validPage);
+                }
+            }, 500);
+        }
+    }, [initialPage, scrollToPage]);
 
     useEffect(() => {
         setNumPages(null);
         setVisiblePage(initialPage);
+        visiblePageRef.current = initialPage;
         pageHeightsRef.current = {};
+        hasScrolledRef.current = false;
     }, [fileUrl, initialPage]);
 
     useEffect(() => {
@@ -107,14 +134,16 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
     }, []);
 
     const onPageLoadSuccess = useCallback((page) => {
-        pageHeightsRef.current[page.pageNumber] = page.height * (700 * scale / page.width);
-        if (page.pageNumber === initialPage && scrollContainerRef.current) {
+        pageHeightsRef.current[page.pageNumber] = page.height * (700 * scaleRef.current / page.width);
+        if (!isNaN(initialPage) && page.pageNumber === initialPage && !hasScrolledRef.current) {
+            hasScrolledRef.current = true;
             scrollToPage(initialPage);
         }
-    }, [initialPage, scrollToPage, scale]);
+    }, [initialPage, scrollToPage]);
 
     useEffect(() => {
         setPageInput(visiblePage.toString());
+        visiblePageRef.current = visiblePage;
     }, [visiblePage]);
 
     const handlePageSubmit = (e) => {
