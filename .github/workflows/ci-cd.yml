@@ -140,8 +140,8 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
 
-          # Backend image: rebuild if Dockerfile or requirements.txt changed
-          if echo "$CHANGED" | grep -qE "^server/(Dockerfile|requirements\.txt)"; then
+          # Backend image: rebuild if anything under server/ changed (code is baked via COPY . .)
+          if echo "$CHANGED" | grep -qE "^server/"; then
             echo "build_backend=true" >> "$GITHUB_ENV"
           else
             echo "build_backend=false" >> "$GITHUB_ENV"
@@ -237,7 +237,7 @@ jobs:
 
           BUILD_ARGS=""
           [ "${{ env.build_backend }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS backend"
-          [ "${{ env.build_nginx }}" = "true" ] && BUILD_ARGS="$BUILD_ARGS frontend"
+          [ "${{ env.build_nginx }}" = "true" ]   && BUILD_ARGS="$BUILD_ARGS frontend"
 
           if [ -n "$BUILD_ARGS" ]; then
             ${{ env.COMPOSE_CMD }} build $BUILD_ARGS
