@@ -81,17 +81,20 @@ class FastEmbedProvider:
     """In-process ONNX embedding via fastembed — no HTTP, no Ollama, fastest option on CPU.
 
     Recommended models (set via EMBEDDING_MODEL env):
-      nomic-ai/nomic-embed-text-v1.5          768 dim  multilingual, fast
-      BAAI/bge-small-en-v1.5                  384 dim  fastest, English-only
-      BAAI/bge-base-en-v1.5                   768 dim  balanced
-      sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  384 dim  very fast, multilingual
+      BAAI/bge-m3                              1024 dim  multilingual, drop-in for Ollama bge-m3
+      nomic-ai/nomic-embed-text-v1.5           768 dim  multilingual, faster
+      BAAI/bge-small-en-v1.5                   384 dim  fastest, English-only
+
+    First run downloads the ONNX model from HuggingFace Hub into the fastembed
+    cache dir (FASTEMBED_CACHE_DIR env, default ~/.cache/fastembed). Mount a
+    Docker volume there so the download survives container rebuilds.
 
     NOTE: switching model changes the vector dimension — existing Qdrant collections
     must be deleted and re-indexed if you change EMBEDDING_DIM.
     """
 
-    def __init__(self, model: str = None, dim: int = 768):
-        self._modelName = model or os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+    def __init__(self, model: str = None, dim: int = 1024):
+        self._modelName = model or os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
         self._dim = dim
         self._model = None
 

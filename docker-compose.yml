@@ -18,6 +18,8 @@ services:
       # Mount source code — code changes only need restart, not rebuild
       # Only rebuild image when requirements.txt or Dockerfile changes
       - ./server:/app
+      # Persist fastembed ONNX model cache across container rebuilds
+      - fastembed_cache:/root/.cache/fastembed
     depends_on:
       db:
         condition: service_healthy
@@ -134,3 +136,4 @@ volumes:
   postgres_data:
   qdrant_data:
   neo4j_data:
+  fastembed_cache:
