@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from typing import Dict, List, Optional
 
@@ -96,16 +97,29 @@ class SimpleRagProvider:
 
     async def index(self, filePath: str, projectId: str, documentId: str, userId: str, filename: Optional[str] = None) -> int:
         try:
+            logger.info(f"SimpleRagProvider.index start documentId={documentId} file={filePath}")
+            t0 = time.perf_counter()
+
+            tParse = time.perf_counter()
             pages = documentParserService.parse(filePath)
+            logger.info(f"SimpleRagProvider.index parse done pages={len(pages)} elapsed={time.perf_counter()-tParse:.2f}s")
             if not pages:
                 logger.warning(f"SimpleRagProvider: no content extracted from '{filePath}'")
                 return 0
+
+            tChunk = time.perf_counter()
             chunks = _chunkPages(pages)
+            logger.info(f"SimpleRagProvider.index chunk done chunks={len(chunks)} elapsed={time.perf_counter()-tChunk:.2f}s")
             if not chunks:
                 logger.warning(f"SimpleRagProvider.index: no chunks produced from '{filePath}' for document {documentId}")
                 return 0
+
             texts = [c["text"] for c in chunks]
+            tEmbed = time.perf_counter()
+            logger.info(f"SimpleRagProvider.index embedding start chunks={len(chunks)}")
             vectors = await embeddingService.embedBatch(texts)
+            logger.info(f"SimpleRagProvider.index embedding done elapsed={time.perf_counter()-tEmbed:.2f}s")
+
             collName = self._collectionName(f"project_{projectId}")
             await self._ensureCollection(collName)
             client = await self._getClient()
@@ -126,8 +140,13 @@ class SimpleRagProvider:
                 )
                 for i in range(len(chunks))
             ]
+
+            tUpsert = time.perf_counter()
             await client.upsert(collection_name=collName, points=points)
-            logger.info(f"SimpleRagProvider: indexed {len(points)} chunks for document {documentId}")
+            logger.info(f"SimpleRagProvider.index upsert done points={len(points)} elapsed={time.perf_counter()-tUpsert:.2f}s")
+
+            total = time.perf_counter() - t0
+            logger.info(f"SimpleRagProvider.index complete documentId={documentId} chunks={len(points)} total={total:.2f}s")
             return len(points)
         except Exception as e:
             logger.error(f"SimpleRagProvider.index failed for document {documentId}: {e}")

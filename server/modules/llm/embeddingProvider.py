@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from typing import List, Protocol
 
 import httpx
@@ -10,6 +11,7 @@ from openai import AsyncOpenAI
 from config.logger import logger
 
 _ollamaSemaphore = asyncio.Semaphore(int(os.getenv("OLLAMA_MAX_CONCURRENT", "1")))
+_OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_EMBED_TIMEOUT", "300"))
 
 
 class EmbeddingProvider(Protocol):
@@ -37,21 +39,33 @@ class OllamaEmbeddingProvider:
         self._dim = dim
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
+        waitStart = time.perf_counter()
         async with _ollamaSemaphore:
+            waitSec = time.perf_counter() - waitStart
+            if waitSec > 1.0:
+                logger.info(f"OllamaEmbeddingProvider.embed semaphore wait={waitSec:.1f}s texts={len(texts)}")
             return await self._doEmbed(texts)
 
     async def _doEmbed(self, texts: List[str]) -> List[List[float]]:
+        charCount = sum(len(t) for t in texts)
+        logger.info(f"OllamaEmbeddingProvider._doEmbed start texts={len(texts)} chars={charCount} model={self._model} timeout={_OLLAMA_TIMEOUT}s")
+        t0 = time.perf_counter()
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=_OLLAMA_TIMEOUT) as client:
+                logger.info(f"OllamaEmbeddingProvider._doEmbed sending POST to {self._baseUrl}/api/embed")
                 resp = await client.post(
                     f"{self._baseUrl}/api/embed",
-                    json={"model": self._model, "input": texts},
+                    json={"model": self._model, "input": texts, "keep_alive": "10m"},
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data.get("embeddings", [])
+                embeddings = data.get("embeddings", [])
+                elapsed = time.perf_counter() - t0
+                logger.info(f"OllamaEmbeddingProvider._doEmbed done texts={len(texts)} elapsed={elapsed:.2f}s")
+                return embeddings
         except Exception as e:
-            logger.error(f"OllamaEmbeddingProvider._doEmbed failed model={self._model}: {type(e).__name__}: {e}")
+            elapsed = time.perf_counter() - t0
+            logger.error(f"OllamaEmbeddingProvider._doEmbed failed after {elapsed:.2f}s model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
@@ -151,15 +165,22 @@ class EmbeddingService:
             return results[0]
         return [0.0] * self._dim
 
-    async def embedBatch(self, texts: List[str], batchSize: int = 32) -> List[List[float]]:
+    async def embedBatch(self, texts: List[str], batchSize: int = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "8"))) -> List[List[float]]:
         """Embed multiple texts, splitting into batches to avoid large payloads."""
         if not texts:
             return []
+        totalBatches = (len(texts) + batchSize - 1) // batchSize
+        logger.info(f"EmbeddingService.embedBatch start total={len(texts)} texts batchSize={batchSize} batches={totalBatches}")
+        t0 = time.perf_counter()
         results = []
         for i in range(0, len(texts), batchSize):
             batch = texts[i:i + batchSize]
+            batchNum = i // batchSize + 1
+            logger.info(f"EmbeddingService.embedBatch batch {batchNum}/{totalBatches} size={len(batch)}")
             vectors = await self._provider.embed(batch)
             results.extend(vectors)
+        elapsed = time.perf_counter() - t0
+        logger.info(f"EmbeddingService.embedBatch done total={len(texts)} elapsed={elapsed:.2f}s avg={(elapsed/totalBatches):.2f}s/batch")
         return results
 
 
