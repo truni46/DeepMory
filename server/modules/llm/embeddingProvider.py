@@ -77,6 +77,55 @@ class OllamaEmbeddingProvider:
         return self._model
 
 
+class FastEmbedProvider:
+    """In-process ONNX embedding via fastembed — no HTTP, no Ollama, fastest option on CPU.
+
+    Recommended models (set via EMBEDDING_MODEL env):
+      nomic-ai/nomic-embed-text-v1.5          768 dim  multilingual, fast
+      BAAI/bge-small-en-v1.5                  384 dim  fastest, English-only
+      BAAI/bge-base-en-v1.5                   768 dim  balanced
+      sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  384 dim  very fast, multilingual
+
+    NOTE: switching model changes the vector dimension — existing Qdrant collections
+    must be deleted and re-indexed if you change EMBEDDING_DIM.
+    """
+
+    def __init__(self, model: str = None, dim: int = 768):
+        self._modelName = model or os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+        self._dim = dim
+        self._model = None
+
+    def _getModel(self):
+        if self._model is None:
+            from fastembed import TextEmbedding
+            logger.info(f"FastEmbedProvider: loading model '{self._modelName}'")
+            self._model = TextEmbedding(model_name=self._modelName)
+            logger.info(f"FastEmbedProvider: model loaded")
+        return self._model
+
+    async def embed(self, texts: List[str]) -> List[List[float]]:
+        t0 = time.perf_counter()
+        try:
+            loop = asyncio.get_event_loop()
+            model = self._getModel()
+            vectors = await loop.run_in_executor(None, lambda: [v.tolist() for v in model.embed(texts)])
+            elapsed = time.perf_counter() - t0
+            logger.info(f"FastEmbedProvider.embed done texts={len(texts)} elapsed={elapsed:.2f}s")
+            return vectors
+        except Exception as e:
+            elapsed = time.perf_counter() - t0
+            logger.error(f"FastEmbedProvider.embed failed after {elapsed:.2f}s: {type(e).__name__}: {e}")
+            raise
+
+    @property
+    def dimension(self) -> int:
+        return self._dim
+
+    @property
+    def modelName(self) -> str:
+        return self._modelName
+
+
 class OpenAIEmbeddingProvider:
     """Uses official OpenAI embeddings API."""
 
@@ -143,6 +192,8 @@ class EmbeddingService:
         try:
             if self.providerName == "ollama":
                 return OllamaEmbeddingProvider(dim=self._dim)
+            elif self.providerName == "fastembed":
+                return FastEmbedProvider(dim=self._dim)
             elif self.providerName == "openai":
                 return OpenAIEmbeddingProvider(dim=self._dim)
             elif self.providerName == "generic":
