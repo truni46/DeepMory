@@ -232,7 +232,7 @@ class DocumentService:
         except Exception as e:
             logger.error(f"_processDocument failed for {documentId}: {e}")
             await documentRepository.updateEmbedding(
-                documentId, "failed", errorMsg=str(e)
+                documentId, "failed", errorMsg="Embedding failed. Please retry."
             )
 
     async def _generateSummary(self, documentId: str, filePath: str, indexPath: str = None) -> None:
