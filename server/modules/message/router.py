@@ -104,7 +104,10 @@ async def sendMessageStream(data: MessageRequest, user: Dict = Depends(getCurren
                     data.projectId,
                     data.documentIds,
                 ):
-                    if "__TITLE__" in chunk:
+                    if chunk.startswith("__TSTART__") and chunk.endswith("__TEND__"):
+                        thinking_text = chunk[len("__TSTART__"):-len("__TEND__")]
+                        yield f"data: {json.dumps({'thinking': thinking_text})}\n\n"
+                    elif "__TITLE__" in chunk:
                         start = chunk.index("__TITLE__") + len("__TITLE__")
                         end = chunk.index("__TITLE__", start)
                         yield f"data: {json.dumps({'title': chunk[start:end]})}\n\n"

@@ -148,6 +148,12 @@ class DocumentService:
             logger.info(f"_uploadOne: duplicate detected for '{filename}', returning existing document {existing['id']}")
             return existing
 
+        # Rename if a document with the same display name already exists
+        stem, ext = os.path.splitext(filename)
+        count = await documentRepository.countByFilenamePattern(stem, ext, ownerId)
+        if count > 0:
+            filename = f"{stem} ({count}){ext}"
+
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
         filePath = UPLOAD_DIR / storedFilename
 

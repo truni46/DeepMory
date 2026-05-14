@@ -60,8 +60,15 @@ export default function ChatInput({
     onStop,
 }) {
     const [message, setMessage] = useState('');
+    const [attachedDocs, setAttachedDocs] = useState([]);
     const draftsRef = useRef({});
     const prevConvIdRef = useRef(conversationId);
+
+    // If a doc is removed from the parent selectedDocs (e.g. via DocumentListPanel),
+    // remove it from the input chips too
+    useEffect(() => {
+        setAttachedDocs(prev => prev.filter(d => selectedDocs.some(sd => sd.id === d.id)));
+    }, [selectedDocs]);
 
     useEffect(() => {
         if (prevConvIdRef.current !== conversationId) {
@@ -69,6 +76,7 @@ export default function ChatInput({
 
             const nextMessage = draftsRef.current[conversationId] || '';
             setMessage(nextMessage);
+            setAttachedDocs([]);
 
             if (editorRef.current) {
                 editorRef.current.textContent = nextMessage;
@@ -151,6 +159,7 @@ export default function ChatInput({
             }
             onSend(toSend);
             setMessage('');
+            setAttachedDocs([]);
             if (editorRef.current) {
                 editorRef.current.textContent = '';
             }
@@ -210,9 +219,9 @@ export default function ChatInput({
                 <div className="flex items-end gap-2">
                     <div className="relative flex-1 flex flex-col bg-white border border-border rounded-3xl shadow-lg transition-shadow hover:shadow-xl">
 
-                        {selectedDocs.filter(d => d.active !== false).length > 0 && (
+                        {attachedDocs.filter(d => d.active !== false).length > 0 && (
                             <div className="flex flex-wrap gap-2 pt-3 px-3 pb-1">
-                                {selectedDocs.filter(d => d.active !== false).map(doc => {
+                                {attachedDocs.filter(d => d.active !== false).map(doc => {
                                     const colors = getFileColorConfig(doc.filename);
                                     return (
                                         <div
@@ -333,9 +342,13 @@ export default function ChatInput({
             {
         showDocPicker && (
             <DocumentPickerModal
-                onConfirm={onDocumentsConfirm}
+                onConfirm={(docs) => {
+                    onDocumentsConfirm(docs);
+                    setAttachedDocs(docs);
+                    setShowDocPicker(false);
+                }}
                 onClose={() => setShowDocPicker(false)}
-                selectedIds={selectedDocs.map(d => d.id)}
+                selectedIds={attachedDocs.map(d => d.id)}
             />
         )
     }

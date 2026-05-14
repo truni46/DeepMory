@@ -33,13 +33,15 @@ export default function ChatPage() {
     const [isTyping, setIsTyping] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const [streamingMessage, setStreamingMessage] = useState('');
+    const [streamingThinking, setStreamingThinking] = useState(null);
+    const [thinkingDuration, setThinkingDuration] = useState(null);
     const [agentGroups, setAgentGroups] = useState(null);
     const [quotaStatus, setQuotaStatus] = useState(null);
     const [quotaWarning, setQuotaWarning] = useState(false);
     const [quotaBlocked, setQuotaBlocked] = useState(false);
     const [selectedDocs, setSelectedDocs] = useState([]);
     const [viewingDocument, setViewingDocument] = useState(null);
-    const [viewerWidth, setViewerWidth] = useState(400); // pixels
+    const [viewerWidth, setViewerWidth] = useState(400);
 
     const splitPaneRef = useRef(null);
     const viewerRef = useRef(null);
@@ -50,6 +52,9 @@ export default function ChatPage() {
     const justCreatedConversationId = useRef(null);
     const draftDocsRef = useRef({});
     const prevConvIdRef = useRef(activeConversationId);
+    const thinkingTextRef = useRef('');
+    const thinkingStartRef = useRef(null);
+    const thinkingDurationRef = useRef(null);
 
     // Resize handlers for the document side viewer
     const startResizing = useCallback(() => {
@@ -91,6 +96,14 @@ export default function ChatPage() {
             window.removeEventListener('mouseup', stopResizing);
         };
     }, [resize, stopResizing]);
+
+    // Set viewer to 45% of container width when a new document is opened
+    const docId = viewingDocument?.doc?.id;
+    useEffect(() => {
+        if (!docId || !splitPaneRef.current) return;
+        const containerWidth = splitPaneRef.current.offsetWidth;
+        setViewerWidth(Math.round(containerWidth * 0.45));
+    }, [docId]);
 
     // Save/restore doc selection per conversation
     useEffect(() => {
@@ -361,18 +374,38 @@ export default function ChatPage() {
 
         try {
             setStreamingMessage('');
+            setStreamingThinking(null);
+            setThinkingDuration(null);
+            thinkingTextRef.current = '';
+            thinkingStartRef.current = null;
+            thinkingDurationRef.current = null;
+
             await streamingService.sendMessage(
                 messageText,
                 currentId,
-                (chunk) => setStreamingMessage(prev => prev + chunk),
+                (chunk) => {
+                    // First text chunk signals end of thinking phase
+                    if (thinkingStartRef.current !== null && thinkingDurationRef.current === null) {
+                        thinkingDurationRef.current = Date.now() - thinkingStartRef.current;
+                        setThinkingDuration(thinkingDurationRef.current);
+                    }
+                    setStreamingMessage(prev => prev + chunk);
+                },
                 (fullResponse) => {
                     const aiMessage = {
                         role: 'assistant',
                         content: fullResponse,
-                        createdAt: new Date().toISOString()
+                        createdAt: new Date().toISOString(),
+                        thinking: thinkingTextRef.current || null,
+                        thinkingDuration: thinkingDurationRef.current,
                     };
                     setMessages(prev => [...prev, aiMessage]);
                     setStreamingMessage('');
+                    setStreamingThinking(null);
+                    setThinkingDuration(null);
+                    thinkingTextRef.current = '';
+                    thinkingStartRef.current = null;
+                    thinkingDurationRef.current = null;
                     setIsTyping(false);
                     setIsStreaming(false);
                 },
@@ -381,6 +414,8 @@ export default function ChatPage() {
                         logger.error('Stream error:', error);
                         setStreamingMessage('');
                     }
+                    setStreamingThinking(null);
+                    setThinkingDuration(null);
                     setIsTyping(false);
                     setIsStreaming(false);
                 },
@@ -402,6 +437,13 @@ export default function ChatPage() {
                 },
                 () => {
                     loadConversations();
+                },
+                (thinkingChunk) => {
+                    if (thinkingStartRef.current === null) {
+                        thinkingStartRef.current = Date.now();
+                    }
+                    thinkingTextRef.current += thinkingChunk;
+                    setStreamingThinking(thinkingTextRef.current);
                 },
             );
         } catch (error) {
@@ -466,9 +508,8 @@ export default function ChatPage() {
     return (
         <div className="flex flex-col h-full w-full bg-page relative">
             <Topbar
-                title={activeConversationId
-                    ? (conversations?.find(c => c.id === activeConversationId)?.title || 'Chat')
-                    : 'New Conversation'}
+                title={conversations?.find(c => c.id === activeConversationId)?.title || 'Chat'}
+                isNew={!activeConversationId}
             />
 
             {/* Content Area (chat + optional side viewer) */}
@@ -518,13 +559,15 @@ export default function ChatPage() {
                                         ))}
                                     </div>
                                 )}
-                                {isTyping && !streamingMessage && <TypingIndicator />}
-                                {streamingMessage && (
+                                {isTyping && !streamingMessage && !streamingThinking && <TypingIndicator />}
+                                {(streamingMessage || streamingThinking !== null) && (
                                     <ChatMessage
                                         message={{
                                             role: 'assistant',
                                             content: streamingMessage,
-                                            createdAt: new Date().toISOString()
+                                            createdAt: new Date().toISOString(),
+                                            thinking: streamingThinking,
+                                            thinkingDuration: thinkingDuration,
                                         }}
                                         showTimestamp={false}
                                     />
@@ -552,9 +595,15 @@ export default function ChatPage() {
                 {/* Resizer */}
                 {viewingDocument && (
                     <div
-                        className="w-1.5 hover:w-2 bg-transparent hover:bg-gray-300 active:bg-blue-400 cursor-col-resize z-50 flex-shrink-0 transition-colors"
+                        className="w-1 cursor-col-resize z-50 flex-shrink-0 flex items-center justify-center group select-none relative"
                         onMouseDown={startResizing}
-                    />
+                    >
+                        {/* 1px separator line */}
+                        <div className="absolute inset-y-0 w-px transition-colors" />
+                        {/* Pill — hidden until split line area is hovered */}
+                        <div className="relative z-10 flex flex-col gap-[3px] items-center justify-center w-[6px] h-14 rounded-full bg-page shadow-sm  group-hover:bg-gray-400 group-active:bg-gray-500 transition-all duration-150">
+                        </div>
+                    </div>
                 )}
 
                 {/* Document Side Viewer */}

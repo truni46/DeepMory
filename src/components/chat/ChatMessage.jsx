@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import ThinkingBlock from './ThinkingBlock';
 
 export default function ChatMessage({ message, showTimestamp = true, onDocumentClick }) {
     const isUser = message.role === 'user';
@@ -14,6 +15,9 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group w-full`}>
             <div className={`flex items-start space-x-3 ${isUser ? 'max-w-[75%]' : 'w-full'}`}>
                 <div className="flex flex-col space-y-1 w-full">
+                    {!isUser && typeof message.thinking === 'string' && (
+                        <ThinkingBlock content={message.thinking} duration={message.thinkingDuration ?? null} />
+                    )}
                     <div className={`${isUser ? 'bg-primary text-white' : 'bg-transparent w-full'} rounded-3xl rounded-tr px-4 py-2`}>
                         <div className={`prose prose-sm max-w-none break-words ${isUser ? 'text-white prose-invert' : 'text-text-primary'} [&>p]:!text-[14.5px] [&>p]:!leading-loose [&>ul>li]:!text-[14.5px] [&>ul>li]:!leading-loose [&>ol>li]:!text-[14.5px] [&>ol>li]:!leading-loose [&>ul]:!list-disc [&>ul]:!pl-5`}>
                             {isUser ? (

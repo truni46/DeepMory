@@ -62,7 +62,7 @@ multidict==6.7.1
 mypy_extensions==1.1.0
 nano-vectordb==0.0.4.3
 networkx==3.6.1
-numpy==2.4.3
+numpy>=1.26,<3
 openai==2.30.0
 orjson==3.11.7
 ormsgpack==1.12.2

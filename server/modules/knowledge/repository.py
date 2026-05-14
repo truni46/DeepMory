@@ -1,5 +1,6 @@
 # server/modules/knowledge/repository.py
 from typing import Dict, List, Optional, Tuple
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -256,6 +257,23 @@ class DocumentRepository:
                 return None
             matches.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
             return matches[0]
+
+    async def countByFilenamePattern(self, stem: str, ext: str, ownerId: str) -> int:
+        """Count docs whose filename is exactly '{stem}{ext}' or '{stem} (N){ext}' for any N."""
+        pattern = re.compile(rf'^{re.escape(stem)}( \(\d+\))?{re.escape(ext)}$')
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """SELECT filename FROM documents WHERE "ownerId" = $1""",
+                    ownerId,
+                )
+                return sum(1 for row in rows if pattern.match(row['filename']))
+        else:
+            data = db.read_json("documents")
+            return sum(
+                1 for d in data.values()
+                if str(d.get("ownerId")) == str(ownerId) and pattern.match(d.get("filename", ""))
+            )
 
     async def delete(self, documentId: str, userId: str) -> Optional[Tuple[str, str]]:
         """Returns (filePath, ownerId) if deleted, None if not found/unauthorized."""
