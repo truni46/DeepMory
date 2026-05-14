@@ -97,7 +97,6 @@ pypdf==5.4.0
 python-docx==1.1.2
 openpyxl==3.1.5
 qdrant-client==1.17.1
-fastembed==0.4.2
 redis==7.4.0
 regex==2026.3.32
 requests==2.33.0
