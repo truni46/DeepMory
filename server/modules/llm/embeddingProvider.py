@@ -187,27 +187,30 @@ class HuggingFaceEmbeddingProvider:
 
 
 class GeminiEmbeddingProvider:
-    """Google Gemini text-embedding-004 — free tier 1500 req/min.
+    """Google Gemini embedding via REST API — free tier 1500 req/min.
 
-    Calls the v1 REST API directly (both SDKs default to v1beta which
-    does not serve text-embedding-004). Requires GEMINI_API_KEY env var.
-    Max dimension: 768.
+    Supports both older models (text-embedding-004 on v1) and newer
+    Gemini embedding models (gemini-embedding-exp-* on v1beta).
+    Tries v1 first, falls back to v1beta automatically.
+
+    Requires GEMINI_API_KEY env var.
     """
 
-    _BASE = "https://generativelanguage.googleapis.com/v1"
+    _VERSIONS = ["v1beta", "v1"]
 
     def __init__(self, model: str = None, dim: int = 768):
-        self._dim = min(dim, 768)
+        self._dim = dim
         modelName = model or os.getenv("EMBEDDING_MODEL", "text-embedding-004")
         self._model = modelName.removeprefix("models/")
         self._apiKey = os.getenv("GEMINI_API_KEY", "")
+        self._apiVersion = None
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
-        logger.info(f"GeminiEmbeddingProvider.embed start texts={len(texts)} model={self._model}")
-        t0 = time.perf_counter()
-        try:
-            url = f"{self._BASE}/models/{self._model}:batchEmbedContents"
-            requests = [
+    def _buildUrl(self, version: str) -> str:
+        return f"https://generativelanguage.googleapis.com/{version}/models/{self._model}:batchEmbedContents"
+
+    def _buildPayload(self, texts: List[str]) -> dict:
+        return {
+            "requests": [
                 {
                     "model": f"models/{self._model}",
                     "content": {"parts": [{"text": t}]},
@@ -215,13 +218,39 @@ class GeminiEmbeddingProvider:
                 }
                 for t in texts
             ]
+        }
+
+    async def embed(self, texts: List[str]) -> List[List[float]]:
+        logger.info(f"GeminiEmbeddingProvider.embed start texts={len(texts)} model={self._model}")
+        t0 = time.perf_counter()
+        payload = self._buildPayload(texts)
+
+        try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    url,
-                    params={"key": self._apiKey},
-                    json={"requests": requests},
-                )
-                resp.raise_for_status()
+                if self._apiVersion:
+                    resp = await client.post(
+                        self._buildUrl(self._apiVersion),
+                        params={"key": self._apiKey},
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                else:
+                    for version in self._VERSIONS:
+                        resp = await client.post(
+                            self._buildUrl(version),
+                            params={"key": self._apiKey},
+                            json=payload,
+                        )
+                        if resp.status_code == 404:
+                            logger.info(f"GeminiEmbeddingProvider: model not found on {version}, trying next")
+                            continue
+                        resp.raise_for_status()
+                        self._apiVersion = version
+                        logger.info(f"GeminiEmbeddingProvider: locked to API {version}")
+                        break
+                    else:
+                        raise ValueError(f"Model '{self._model}' not found on any Gemini API version")
+
                 data = resp.json()
             vectors = [e["values"] for e in data.get("embeddings", [])]
             elapsed = time.perf_counter() - t0
