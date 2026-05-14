@@ -129,6 +129,63 @@ class FastEmbedProvider:
         return self._modelName
 
 
+class HuggingFaceEmbeddingProvider:
+    """HuggingFace Inference API — runs bge-m3 on HF's GPU servers, free tier available.
+
+    Get a free token at https://huggingface.co/settings/tokens
+    Set HF_TOKEN env var.
+
+    Free tier: rate-limited but sufficient for moderate usage.
+    """
+
+    _BASE = "https://api-inference.huggingface.co/models"
+
+    def __init__(self, model: str = None, dim: int = 1024):
+        self._model = model or os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+        self._dim = dim
+        self._token = os.getenv("HF_TOKEN", "")
+        if not self._token:
+            logger.warning("HuggingFaceEmbeddingProvider: HF_TOKEN not set — requests will be rate-limited")
+
+    async def embed(self, texts: List[str]) -> List[List[float]]:
+        url = f"{self._BASE}/{self._model}"
+        headers = {"Content-Type": "application/json"}
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+
+        charCount = sum(len(t) for t in texts)
+        logger.info(f"HuggingFaceEmbeddingProvider.embed start texts={len(texts)} chars={charCount} model={self._model}")
+        t0 = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, headers=headers, json={"inputs": texts})
+
+                if resp.status_code == 503:
+                    # Model is loading on HF servers — wait and retry once
+                    estimatedTime = resp.json().get("estimated_time", 20)
+                    logger.info(f"HuggingFaceEmbeddingProvider: model loading, waiting {estimatedTime:.0f}s")
+                    await asyncio.sleep(min(estimatedTime, 30))
+                    resp = await client.post(url, headers=headers, json={"inputs": texts})
+
+                resp.raise_for_status()
+                data = resp.json()
+                elapsed = time.perf_counter() - t0
+                logger.info(f"HuggingFaceEmbeddingProvider.embed done texts={len(texts)} elapsed={elapsed:.2f}s")
+                return data
+        except Exception as e:
+            elapsed = time.perf_counter() - t0
+            logger.error(f"HuggingFaceEmbeddingProvider.embed failed after {elapsed:.2f}s: {type(e).__name__}: {e}")
+            raise
+
+    @property
+    def dimension(self) -> int:
+        return self._dim
+
+    @property
+    def modelName(self) -> str:
+        return self._model
+
+
 class OpenAIEmbeddingProvider:
     """Uses official OpenAI embeddings API."""
 
@@ -197,6 +254,8 @@ class EmbeddingService:
                 return OllamaEmbeddingProvider(dim=self._dim)
             elif self.providerName == "fastembed":
                 return FastEmbedProvider(dim=self._dim)
+            elif self.providerName == "huggingface":
+                return HuggingFaceEmbeddingProvider(dim=self._dim)
             elif self.providerName == "openai":
                 return OpenAIEmbeddingProvider(dim=self._dim)
             elif self.providerName == "generic":
