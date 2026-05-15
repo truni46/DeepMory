@@ -316,7 +316,11 @@ class GenericOpenAIEmbeddingProvider:
     def __init__(self, baseUrl: str = None, apiKey: str = None, model: str = None, dim: int = 1024):
         baseUrl = baseUrl or os.getenv("EMBEDDING_BASE_URL", "http://localhost:8000/v1")
         apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
-        self._client = AsyncOpenAI(api_key=apiKey, base_url=baseUrl)
+        defaultHeaders = {}
+        if "openrouter.ai" in baseUrl:
+            defaultHeaders["HTTP-Referer"] = os.getenv("APP_URL", "https://deepmory.app")
+            defaultHeaders["X-Title"] = os.getenv("APP_NAME", "DeepMory")
+        self._client = AsyncOpenAI(api_key=apiKey, base_url=baseUrl, default_headers=defaultHeaders)
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
 
