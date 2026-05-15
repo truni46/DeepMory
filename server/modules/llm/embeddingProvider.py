@@ -316,11 +316,12 @@ class GenericOpenAIEmbeddingProvider:
     def __init__(self, baseUrl: str = None, apiKey: str = None, model: str = None, dim: int = 1024):
         baseUrl = baseUrl or os.getenv("EMBEDDING_BASE_URL", "http://localhost:8000/v1")
         self._baseUrl = baseUrl.rstrip("/")
-        self._apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
+        rawKey = apiKey or os.getenv("EMBEDDING_API_KEY", "")
+        self._apiKey = rawKey.strip().strip('"').strip("'")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
-        keyPreview = self._apiKey[:12] + "..." if len(self._apiKey) > 12 else "(empty)"
-        logger.info(f"GenericOpenAIEmbeddingProvider init baseUrl={self._baseUrl} model={self._model} dim={self._dim} key={keyPreview}")
+        keyPreview = self._apiKey[:15] + "..." if len(self._apiKey) > 15 else f"(empty or short: '{self._apiKey}')"
+        logger.info(f"GenericOpenAIEmbeddingProvider init baseUrl={self._baseUrl} model={self._model} dim={self._dim} key={keyPreview} keyLen={len(self._apiKey)}")
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         t0 = time.perf_counter()
