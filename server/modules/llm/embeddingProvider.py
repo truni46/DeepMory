@@ -295,7 +295,7 @@ class OpenAIEmbeddingProvider:
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         try:
-            resp = await self._client.embeddings.create(model=self._model, input=texts)
+            resp = await self._client.embeddings.create(model=self._model, input=texts, dimensions=self._dim)
             return [item.embedding for item in resp.data]
         except Exception as e:
             logger.error(f"OpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
@@ -311,7 +311,7 @@ class OpenAIEmbeddingProvider:
 
 
 class GenericOpenAIEmbeddingProvider:
-    """OpenAI-compatible endpoint with custom base_url (vLLM, LM Studio, etc.)."""
+    """OpenAI-compatible endpoint with custom base_url (OpenRouter, DeepInfra, vLLM, etc.)."""
 
     def __init__(self, baseUrl: str = None, apiKey: str = None, model: str = None, dim: int = 1024):
         baseUrl = baseUrl or os.getenv("EMBEDDING_BASE_URL", "http://localhost:8000/v1")
@@ -322,7 +322,10 @@ class GenericOpenAIEmbeddingProvider:
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         try:
-            resp = await self._client.embeddings.create(model=self._model, input=texts)
+            kwargs = {"model": self._model, "input": texts}
+            if self._dim:
+                kwargs["dimensions"] = self._dim
+            resp = await self._client.embeddings.create(**kwargs)
             return [item.embedding for item in resp.data]
         except Exception as e:
             logger.error(f"GenericOpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
