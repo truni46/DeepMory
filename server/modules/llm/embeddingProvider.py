@@ -319,9 +319,12 @@ class GenericOpenAIEmbeddingProvider:
         self._apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
+        keyPreview = self._apiKey[:12] + "..." if len(self._apiKey) > 12 else "(empty)"
+        logger.info(f"GenericOpenAIEmbeddingProvider init baseUrl={self._baseUrl} model={self._model} dim={self._dim} key={keyPreview}")
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         t0 = time.perf_counter()
+        url = f"{self._baseUrl}/embeddings"
         headers = {
             "Authorization": f"Bearer {self._apiKey}",
             "Content-Type": "application/json",
@@ -331,18 +334,17 @@ class GenericOpenAIEmbeddingProvider:
         payload: dict = {"model": self._model, "input": texts}
         if self._dim:
             payload["dimensions"] = self._dim
+        keyPreview = self._apiKey[:12] + "..." if len(self._apiKey) > 12 else "(empty)"
+        logger.info(f"GenericOpenAIEmbeddingProvider.embed POST {url} model={self._model} texts={len(texts)} dim={self._dim} key={keyPreview}")
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    f"{self._baseUrl}/embeddings",
-                    headers=headers,
-                    json=payload,
-                )
+                resp = await client.post(url, headers=headers, json=payload)
+                logger.info(f"GenericOpenAIEmbeddingProvider.embed response status={resp.status_code} body={resp.text[:300]}")
                 resp.raise_for_status()
                 data = resp.json()
             vectors = [item["embedding"] for item in data.get("data", [])]
             elapsed = time.perf_counter() - t0
-            logger.info(f"GenericOpenAIEmbeddingProvider.embed done texts={len(texts)} elapsed={elapsed:.2f}s")
+            logger.info(f"GenericOpenAIEmbeddingProvider.embed done texts={len(texts)} vectors={len(vectors)} elapsed={elapsed:.2f}s")
             return vectors
         except Exception as e:
             elapsed = time.perf_counter() - t0
