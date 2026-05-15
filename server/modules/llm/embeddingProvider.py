@@ -220,36 +220,50 @@ class GeminiEmbeddingProvider:
             ]
         }
 
+    async def _post(self, client: httpx.AsyncClient, payload: dict) -> httpx.Response:
+        if self._apiVersion:
+            resp = await client.post(
+                self._buildUrl(self._apiVersion),
+                params={"key": self._apiKey},
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp
+
+        for version in self._VERSIONS:
+            resp = await client.post(
+                self._buildUrl(version),
+                params={"key": self._apiKey},
+                json=payload,
+            )
+            if resp.status_code == 404:
+                logger.info(f"GeminiEmbeddingProvider: model not found on {version}, trying next")
+                continue
+            resp.raise_for_status()
+            self._apiVersion = version
+            logger.info(f"GeminiEmbeddingProvider: locked to API {version}")
+            return resp
+        raise ValueError(f"Model '{self._model}' not found on any Gemini API version")
+
     async def embed(self, texts: List[str]) -> List[List[float]]:
         logger.info(f"GeminiEmbeddingProvider.embed start texts={len(texts)} model={self._model}")
         t0 = time.perf_counter()
         payload = self._buildPayload(texts)
+        maxRetries = 5
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                if self._apiVersion:
-                    resp = await client.post(
-                        self._buildUrl(self._apiVersion),
-                        params={"key": self._apiKey},
-                        json=payload,
-                    )
-                    resp.raise_for_status()
-                else:
-                    for version in self._VERSIONS:
-                        resp = await client.post(
-                            self._buildUrl(version),
-                            params={"key": self._apiKey},
-                            json=payload,
-                        )
-                        if resp.status_code == 404:
-                            logger.info(f"GeminiEmbeddingProvider: model not found on {version}, trying next")
-                            continue
-                        resp.raise_for_status()
-                        self._apiVersion = version
-                        logger.info(f"GeminiEmbeddingProvider: locked to API {version}")
+                for attempt in range(maxRetries):
+                    try:
+                        resp = await self._post(client, payload)
                         break
-                    else:
-                        raise ValueError(f"Model '{self._model}' not found on any Gemini API version")
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == 429 and attempt < maxRetries - 1:
+                            wait = 2 ** attempt
+                            logger.warning(f"GeminiEmbeddingProvider: 429 rate limited, retry {attempt+1}/{maxRetries} after {wait}s")
+                            await asyncio.sleep(wait)
+                        else:
+                            raise
 
                 data = resp.json()
             vectors = [e["values"] for e in data.get("embeddings", [])]
@@ -364,17 +378,20 @@ class EmbeddingService:
             return results[0]
         return [0.0] * self._dim
 
-    async def embedBatch(self, texts: List[str], batchSize: int = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "8"))) -> List[List[float]]:
+    async def embedBatch(self, texts: List[str], batchSize: int = int(os.getenv("EMBED_BATCH_SIZE", "8"))) -> List[List[float]]:
         """Embed multiple texts, splitting into batches to avoid large payloads."""
         if not texts:
             return []
         totalBatches = (len(texts) + batchSize - 1) // batchSize
         logger.info(f"EmbeddingService.embedBatch start total={len(texts)} texts batchSize={batchSize} batches={totalBatches}")
         t0 = time.perf_counter()
+        needsDelay = self.providerName in ("gemini", "huggingface")
         results = []
         for i in range(0, len(texts), batchSize):
             batch = texts[i:i + batchSize]
             batchNum = i // batchSize + 1
+            if needsDelay and batchNum > 1:
+                await asyncio.sleep(1.0)
             logger.info(f"EmbeddingService.embedBatch batch {batchNum}/{totalBatches} size={len(batch)}")
             vectors = await self._provider.embed(batch)
             results.extend(vectors)
