@@ -311,28 +311,42 @@ class OpenAIEmbeddingProvider:
 
 
 class GenericOpenAIEmbeddingProvider:
-    """OpenAI-compatible endpoint with custom base_url (OpenRouter, DeepInfra, vLLM, etc.)."""
+    """OpenAI-compatible /v1/embeddings endpoint (OpenRouter, DeepInfra, vLLM, etc.)."""
 
     def __init__(self, baseUrl: str = None, apiKey: str = None, model: str = None, dim: int = 1024):
         baseUrl = baseUrl or os.getenv("EMBEDDING_BASE_URL", "http://localhost:8000/v1")
-        apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
-        defaultHeaders = {}
-        if "openrouter.ai" in baseUrl:
-            defaultHeaders["HTTP-Referer"] = os.getenv("APP_URL", "https://deepmory.app")
-            defaultHeaders["X-Title"] = os.getenv("APP_NAME", "DeepMory")
-        self._client = AsyncOpenAI(api_key=apiKey, base_url=baseUrl, default_headers=defaultHeaders)
+        self._baseUrl = baseUrl.rstrip("/")
+        self._apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
+        t0 = time.perf_counter()
+        headers = {
+            "Authorization": f"Bearer {self._apiKey}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("APP_URL", "https://deepmory.app"),
+            "X-Title": os.getenv("APP_NAME", "DeepMory"),
+        }
+        payload: dict = {"model": self._model, "input": texts}
+        if self._dim:
+            payload["dimensions"] = self._dim
         try:
-            kwargs = {"model": self._model, "input": texts}
-            if self._dim:
-                kwargs["dimensions"] = self._dim
-            resp = await self._client.embeddings.create(**kwargs)
-            return [item.embedding for item in resp.data]
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{self._baseUrl}/embeddings",
+                    headers=headers,
+                    json=payload,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            vectors = [item["embedding"] for item in data.get("data", [])]
+            elapsed = time.perf_counter() - t0
+            logger.info(f"GenericOpenAIEmbeddingProvider.embed done texts={len(texts)} elapsed={elapsed:.2f}s")
+            return vectors
         except Exception as e:
-            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
+            elapsed = time.perf_counter() - t0
+            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed after {elapsed:.2f}s model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
