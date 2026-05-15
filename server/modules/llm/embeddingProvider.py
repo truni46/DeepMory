@@ -311,24 +311,45 @@ class OpenAIEmbeddingProvider:
 
 
 class GenericOpenAIEmbeddingProvider:
-    """OpenAI-compatible endpoint with custom base_url (OpenRouter, DeepInfra, vLLM, etc.)."""
+    """OpenAI-compatible /v1/embeddings endpoint (OpenRouter, DeepInfra, vLLM, etc.)."""
 
     def __init__(self, baseUrl: str = None, apiKey: str = None, model: str = None, dim: int = 1024):
         baseUrl = baseUrl or os.getenv("EMBEDDING_BASE_URL", "http://localhost:8000/v1")
-        apiKey = apiKey or os.getenv("EMBEDDING_API_KEY", "EMPTY")
-        self._client = AsyncOpenAI(api_key=apiKey, base_url=baseUrl)
+        self._baseUrl = baseUrl.rstrip("/")
+        rawKey = apiKey or os.getenv("EMBEDDING_API_KEY", "")
+        self._apiKey = rawKey.strip().strip('"').strip("'")
         self._model = model or os.getenv("EMBEDDING_MODEL", "bge-m3")
         self._dim = dim
+        keyPreview = self._apiKey[:15] + "..." if len(self._apiKey) > 15 else f"(empty or short: '{self._apiKey}')"
+        logger.info(f"GenericOpenAIEmbeddingProvider init baseUrl={self._baseUrl} model={self._model} dim={self._dim} key={keyPreview} keyLen={len(self._apiKey)}")
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
+        t0 = time.perf_counter()
+        url = f"{self._baseUrl}/embeddings"
+        headers = {
+            "Authorization": f"Bearer {self._apiKey}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("APP_URL", "https://deepmory.app"),
+            "X-Title": os.getenv("APP_NAME", "DeepMory"),
+        }
+        payload: dict = {"model": self._model, "input": texts}
+        if self._dim:
+            payload["dimensions"] = self._dim
+        keyPreview = self._apiKey[:12] + "..." if len(self._apiKey) > 12 else "(empty)"
+        logger.info(f"GenericOpenAIEmbeddingProvider.embed POST {url} model={self._model} texts={len(texts)} dim={self._dim} key={keyPreview}")
         try:
-            kwargs = {"model": self._model, "input": texts}
-            if self._dim:
-                kwargs["dimensions"] = self._dim
-            resp = await self._client.embeddings.create(**kwargs)
-            return [item.embedding for item in resp.data]
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                logger.info(f"GenericOpenAIEmbeddingProvider.embed response status={resp.status_code} body={resp.text[:300]}")
+                resp.raise_for_status()
+                data = resp.json()
+            vectors = [item["embedding"] for item in data.get("data", [])]
+            elapsed = time.perf_counter() - t0
+            logger.info(f"GenericOpenAIEmbeddingProvider.embed done texts={len(texts)} vectors={len(vectors)} elapsed={elapsed:.2f}s")
+            return vectors
         except Exception as e:
-            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed model={self._model}: {type(e).__name__}: {e}")
+            elapsed = time.perf_counter() - t0
+            logger.error(f"GenericOpenAIEmbeddingProvider.embed failed after {elapsed:.2f}s model={self._model}: {type(e).__name__}: {e}")
             raise
 
     @property
