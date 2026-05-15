@@ -187,41 +187,75 @@ class HuggingFaceEmbeddingProvider:
 
 
 class GeminiEmbeddingProvider:
-    """Google Gemini text-embedding-004 — free tier 1500 req/min.
+    """Google Gemini embedding via REST API — free tier 1500 req/min.
 
-    Uses google-generativeai (v1 API) which supports text-embedding-004.
-    Requires GEMINI_API_KEY env var. Max dimension: 768.
+    Supports both older models (text-embedding-004 on v1) and newer
+    Gemini embedding models (gemini-embedding-exp-* on v1beta).
+    Tries v1 first, falls back to v1beta automatically.
+
+    Requires GEMINI_API_KEY env var.
     """
 
+    _VERSIONS = ["v1beta", "v1"]
+
     def __init__(self, model: str = None, dim: int = 768):
-        import google.generativeai as genai
-        self._dim = min(dim, 768)
+        self._dim = dim
         modelName = model or os.getenv("EMBEDDING_MODEL", "text-embedding-004")
-        # google-generativeai requires "models/" prefix
-        self._model = modelName if modelName.startswith("models/") else f"models/{modelName}"
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-        self._genai = genai
+        self._model = modelName.removeprefix("models/")
+        self._apiKey = os.getenv("GEMINI_API_KEY", "")
+        self._apiVersion = None
+
+    def _buildUrl(self, version: str) -> str:
+        return f"https://generativelanguage.googleapis.com/{version}/models/{self._model}:batchEmbedContents"
+
+    def _buildPayload(self, texts: List[str]) -> dict:
+        return {
+            "requests": [
+                {
+                    "model": f"models/{self._model}",
+                    "content": {"parts": [{"text": t}]},
+                    "outputDimensionality": self._dim,
+                }
+                for t in texts
+            ]
+        }
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         logger.info(f"GeminiEmbeddingProvider.embed start texts={len(texts)} model={self._model}")
         t0 = time.perf_counter()
+        payload = self._buildPayload(texts)
+
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: self._genai.embed_content(
-                    model=self._model,
-                    content=texts,
-                    output_dimensionality=self._dim,
-                )
-            )
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                if self._apiVersion:
+                    resp = await client.post(
+                        self._buildUrl(self._apiVersion),
+                        params={"key": self._apiKey},
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                else:
+                    for version in self._VERSIONS:
+                        resp = await client.post(
+                            self._buildUrl(version),
+                            params={"key": self._apiKey},
+                            json=payload,
+                        )
+                        if resp.status_code == 404:
+                            logger.info(f"GeminiEmbeddingProvider: model not found on {version}, trying next")
+                            continue
+                        resp.raise_for_status()
+                        self._apiVersion = version
+                        logger.info(f"GeminiEmbeddingProvider: locked to API {version}")
+                        break
+                    else:
+                        raise ValueError(f"Model '{self._model}' not found on any Gemini API version")
+
+                data = resp.json()
+            vectors = [e["values"] for e in data.get("embeddings", [])]
             elapsed = time.perf_counter() - t0
             logger.info(f"GeminiEmbeddingProvider.embed done texts={len(texts)} elapsed={elapsed:.2f}s")
-            # embed_content returns {'embedding': [...]} for single or list of embeddings for batch
-            embeddings = result.get("embedding", [])
-            if embeddings and not isinstance(embeddings[0], list):
-                embeddings = [embeddings]
-            return embeddings
+            return vectors
         except Exception as e:
             elapsed = time.perf_counter() - t0
             logger.error(f"GeminiEmbeddingProvider.embed failed after {elapsed:.2f}s: {type(e).__name__}: {e}")
