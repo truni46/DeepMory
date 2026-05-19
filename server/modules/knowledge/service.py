@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -148,6 +149,12 @@ class DocumentService:
             logger.info(f"_uploadOne: duplicate detected for '{filename}', returning existing document {existing['id']}")
             return existing
 
+        # Rename if a document with the same display name already exists
+        stem, ext = os.path.splitext(filename)
+        count = await documentRepository.countByFilenamePattern(stem, ext, ownerId)
+        if count > 0:
+            filename = f"{stem} ({count}){ext}"
+
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
         filePath = UPLOAD_DIR / storedFilename
 
@@ -176,41 +183,56 @@ class DocumentService:
         self, documentId: str, filePath: str, ownerId: str, userId: str, filename: Optional[str] = None
     ) -> None:
         try:
+            t0 = time.perf_counter()
+            logger.info(f"_processDocument start documentId={documentId} file={filePath}")
             await documentRepository.updateEmbedding(documentId, "processing")
 
             ext = os.path.splitext(filePath)[1].lower()
             if ext == ".doc":
+                tConvert = time.perf_counter()
+                logger.info(f"_processDocument converting .doc to .docx documentId={documentId}")
                 docxPath = _convertDocToDocx(filePath)
                 if docxPath:
                     filePath = docxPath
                     await documentRepository.updateFilePath(documentId, filePath, "docx")
-                    logger.info(f"Converted .doc to .docx for document {documentId}")
+                    logger.info(f"_processDocument .doc conversion done elapsed={time.perf_counter()-tConvert:.2f}s documentId={documentId}")
 
             indexPath = filePath
-            if needsOcr(filePath):
+            tOcrCheck = time.perf_counter()
+            isScanned = needsOcr(filePath)
+            logger.info(f"_processDocument needsOcr={isScanned} elapsed={time.perf_counter()-tOcrCheck:.2f}s documentId={documentId}")
+
+            if isScanned:
                 try:
                     await documentRepository.updateOcr(documentId, "processing", isScanned=True)
+                    tOcr = time.perf_counter()
+                    logger.info(f"_processDocument OCR start documentId={documentId} provider={ocrService.providerName}")
                     ocrPages = ocrService.ocrFile(filePath)
+                    logger.info(f"_processDocument OCR done pages={len(ocrPages)} elapsed={time.perf_counter()-tOcr:.2f}s documentId={documentId}")
                     ocrFilePath = str(OCR_DIR / f"{documentId}_ocr.txt")
                     ocrService.saveOcrText(ocrPages, ocrFilePath)
                     await documentRepository.updateOcr(documentId, "completed", ocrFilePath=ocrFilePath)
                     indexPath = ocrFilePath
-                    logger.info(f"OCR completed for {documentId}: {len(ocrPages)} pages")
                 except Exception as e:
                     logger.error(f"OCR failed for {documentId}: {e}")
                     await documentRepository.updateOcr(documentId, "failed")
 
+            tIndex = time.perf_counter()
+            logger.info(f"_processDocument indexing start documentId={documentId} indexPath={indexPath}")
             chunkCount = await ragService.index(indexPath, ownerId, documentId, userId, filename=filename)
+            logger.info(f"_processDocument indexing done chunkCount={chunkCount} elapsed={time.perf_counter()-tIndex:.2f}s documentId={documentId}")
+
             pageCount = _extractPageCount(filePath)
             await documentRepository.updateEmbedding(
                 documentId, "completed", chunkCount=chunkCount, pageCount=pageCount
             )
-            logger.info(f"_processDocument completed for {documentId}")
+            total = time.perf_counter() - t0
+            logger.info(f"_processDocument completed documentId={documentId} total={total:.2f}s")
             asyncio.create_task(self._generateSummary(documentId, filePath, indexPath))
         except Exception as e:
             logger.error(f"_processDocument failed for {documentId}: {e}")
             await documentRepository.updateEmbedding(
-                documentId, "failed", errorMsg=str(e)
+                documentId, "failed", errorMsg="Embedding failed. Please retry."
             )
 
     async def _generateSummary(self, documentId: str, filePath: str, indexPath: str = None) -> None:

@@ -46,6 +46,8 @@ function ProgressBar({ label, used, limit, percent, extra }) {
 export default function QuotaWidget({ quota, warning, inline = false }) {
     const [expanded, setExpanded] = useState(false);
     const panelRef = useRef(null);
+    const buttonRef = useRef(null);
+    const [panelPos, setPanelPos] = useState({ bottom: 0, left: 0 });
 
     useEffect(() => {
         if (warning && quota) setExpanded(true);
@@ -53,13 +55,27 @@ export default function QuotaWidget({ quota, warning, inline = false }) {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            if (panelRef.current && !panelRef.current.contains(e.target)) {
+            if (
+                panelRef.current && !panelRef.current.contains(e.target) &&
+                buttonRef.current && !buttonRef.current.contains(e.target)
+            ) {
                 setExpanded(false);
             }
         };
         if (expanded) document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [expanded]);
+
+    const toggleInline = () => {
+        if (!expanded && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setPanelPos({
+                bottom: window.innerHeight - rect.top + 8,
+                left: Math.min(rect.left, window.innerWidth - 296),
+            });
+        }
+        setExpanded(e => !e);
+    };
 
     if (!quota) return null;
 
@@ -101,10 +117,40 @@ export default function QuotaWidget({ quota, warning, inline = false }) {
 
     if (inline) {
         return (
-            <div className="relative flex-shrink-0" ref={panelRef}>
-                {expandedPanel}
+            <div className="flex-shrink-0">
+                {expanded && (
+                    <div
+                        ref={panelRef}
+                        className="fixed bg-white border border-border rounded-xl shadow-xl p-4 w-72 animate-in fade-in duration-200 z-[200]"
+                        style={{ bottom: panelPos.bottom, left: panelPos.left }}
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-text-primary">Token Usage</h4>
+                            {isBlocked && (
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                                    QUOTA EXCEEDED
+                                </span>
+                            )}
+                        </div>
+                        <ProgressBar
+                            label="Session"
+                            used={quota.session?.used || 0}
+                            limit={quota.session?.limit || 1}
+                            percent={quota.session?.percent || 0}
+                            extra={`${formatTime(quota.session?.remainingSeconds || 0)} remaining`}
+                        />
+                        <ProgressBar
+                            label="Weekly"
+                            used={quota.weekly?.used || 0}
+                            limit={quota.weekly?.limit || 1}
+                            percent={quota.weekly?.percent || 0}
+                            extra={`Resets ${quota.weekly?.resetDay || 'Mon'}`}
+                        />
+                    </div>
+                )}
                 <button
-                    onClick={() => setExpanded(!expanded)}
+                    ref={buttonRef}
+                    onClick={toggleInline}
                     title="Token quota"
                     className={`relative flex items-center justify-center w-7 h-7 ${warning ? 'animate-pulse' : ''}`}
                 >

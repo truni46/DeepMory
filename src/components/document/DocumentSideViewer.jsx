@@ -8,13 +8,31 @@ import TextViewer from '../viewer/TextViewer';
 import TSVViewer from '../viewer/TSVViewer';
 import MarkdownViewer from '../viewer/MarkdownViewer';
 
+function parsePageLabel(str) {
+    if (!str) return 1;
+    const n = parseInt(str, 10);
+    if (!isNaN(n) && n > 0) return n;
+    // Roman numeral fallback (handles i, iv, viii, xii, etc.)
+    const romanMap = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
+    const upper = str.trim().toUpperCase();
+    let result = 0, prev = 0;
+    for (let i = upper.length - 1; i >= 0; i--) {
+        const val = romanMap[upper[i]];
+        if (!val) return 1;
+        if (val < prev) result -= val;
+        else result += val;
+        prev = val;
+    }
+    return result > 0 ? result : 1;
+}
+
 export default function DocumentSideViewer({ document, pageStart, pageEnd, onClose }) {
     const [fileUrl, setFileUrl] = useState(null);
     const [fileError, setFileError] = useState(null);
-    const [scale, setScale] = useState(1.0);
+    const [scale, setScale] = useState(0.7);
 
-    // Compute initial page to scroll to (always the start of the range)
-    const initialPage = pageStart ? parseInt(pageStart, 10) : 1;
+    // Compute initial page — supports Arabic numbers and Roman numerals (viii → 8)
+    const initialPage = parsePageLabel(pageStart);
 
     // Label shown in header
     const pageLabel = pageStart
@@ -41,7 +59,7 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
         // Reset state when switching to a different document
         setFileUrl(null);
         setFileError(null);
-        setScale(1.0);
+        setScale(0.7);
 
         let objectUrl = null;
         documentService.getDocumentFileUrl(document.id)
@@ -63,7 +81,7 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
     if (!document) return null;
 
     return (
-        <div className="h-full flex flex-col bg-white border border-gray-300 shadow-xl overflow-hidden transition-all duration-300 m-3 rounded-2xl transform translate-x-0">
+        <div className="h-full flex flex-col bg-white border border-gray-300 shadow-xl overflow-hidden transition-all duration-300 m-1.5 rounded-2xl transform translate-x-0">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-color bg-gray-50/50">
                 <div className="flex items-center gap-3 overflow-hidden">

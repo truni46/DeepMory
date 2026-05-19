@@ -21,7 +21,7 @@ class StreamingService {
      * @param {Array|null} documentIds Document IDs for RAG
      * @param {Function|null} onSources Callback for source citations
      */
-    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota, documentIds = null, onSources = null, onTitle = null) {
+    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota, documentIds = null, onSources = null, onTitle = null, onThinking = null) {
         try {
             this._abortController = new AbortController();
 
@@ -82,6 +82,10 @@ class StreamingService {
                             if (data.error) {
                                 onError(new Error(data.error));
                                 return;
+                            }
+
+                            if (data.thinking && onThinking) {
+                                onThinking(data.thinking);
                             }
 
                             if (data.chunk) {
