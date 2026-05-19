@@ -24,7 +24,7 @@ from modules.rag.documentParser import ParsedPage, documentParserService
 from modules.rag.repository import Document, SearchResult
 
 
-def _chunkPages(pages: List[ParsedPage], chunkSize: int = 800, overlap: int = 100) -> List[dict]:
+def _chunkPages(pages: List[ParsedPage], chunkSize: int = int(os.getenv("CHUNK_SIZE", "1200")), overlap: int = int(os.getenv("CHUNK_OVERLAP", "150"))) -> List[dict]:
     if overlap >= chunkSize:
         raise ValueError(f"_chunkPages: overlap ({overlap}) must be less than chunkSize ({chunkSize})")
 

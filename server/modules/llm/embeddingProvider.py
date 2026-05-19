@@ -403,24 +403,33 @@ class EmbeddingService:
         return [0.0] * self._dim
 
     async def embedBatch(self, texts: List[str], batchSize: int = int(os.getenv("EMBED_BATCH_SIZE", "8"))) -> List[List[float]]:
-        """Embed multiple texts, splitting into batches to avoid large payloads."""
+        """Embed multiple texts, splitting into batches. Rate-limited providers run sequentially; others run in parallel."""
         if not texts:
             return []
-        totalBatches = (len(texts) + batchSize - 1) // batchSize
+        batches = [texts[i:i + batchSize] for i in range(0, len(texts), batchSize)]
+        totalBatches = len(batches)
         logger.info(f"EmbeddingService.embedBatch start total={len(texts)} texts batchSize={batchSize} batches={totalBatches}")
         t0 = time.perf_counter()
         needsDelay = self.providerName in ("gemini", "huggingface")
-        results = []
-        for i in range(0, len(texts), batchSize):
-            batch = texts[i:i + batchSize]
-            batchNum = i // batchSize + 1
-            if needsDelay and batchNum > 1:
-                await asyncio.sleep(1.0)
-            logger.info(f"EmbeddingService.embedBatch batch {batchNum}/{totalBatches} size={len(batch)}")
-            vectors = await self._provider.embed(batch)
-            results.extend(vectors)
+
+        if needsDelay:
+            results = []
+            for idx, batch in enumerate(batches):
+                if idx > 0:
+                    await asyncio.sleep(1.0)
+                logger.info(f"EmbeddingService.embedBatch batch {idx + 1}/{totalBatches} size={len(batch)}")
+                vectors = await self._provider.embed(batch)
+                results.extend(vectors)
+        else:
+            async def _embedOne(idx: int, batch: List[str]):
+                logger.info(f"EmbeddingService.embedBatch batch {idx + 1}/{totalBatches} size={len(batch)}")
+                return await self._provider.embed(batch)
+
+            batchResults = await asyncio.gather(*[_embedOne(i, b) for i, b in enumerate(batches)])
+            results = [vec for batch in batchResults for vec in batch]
+
         elapsed = time.perf_counter() - t0
-        logger.info(f"EmbeddingService.embedBatch done total={len(texts)} elapsed={elapsed:.2f}s avg={(elapsed/totalBatches):.2f}s/batch")
+        logger.info(f"EmbeddingService.embedBatch done total={len(texts)} elapsed={elapsed:.2f}s avg={(elapsed/max(totalBatches,1)):.2f}s/batch")
         return results
 
 
